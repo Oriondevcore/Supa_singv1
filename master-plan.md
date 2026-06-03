@@ -4,13 +4,97 @@
 
 ---
 
-## Vision
+## The Empire Vision
 
-A mobile-first karaoke song request ecosystem that connects singers at Connor's Public House (and beyond) with the DJ's OpenKJ system — frictionless, fun, and professional. Long-term: anonymous, opt-in ML research on karaoke behaviour.
+Orion Ventures is a hospitality-technology company. SupaSing is the first product — the on-ramp to a multi-venue Guest Relations System (GRS) that connects venues, singers, DJs, and data into a unified platform.
+
+### GRS — Guest Relations System
+
+A multi-tenant platform where each venue gets its own branded portal:
+
+| Subdomain | Purpose |
+|-----------|---------|
+| `grs.oriondevcore.com` | GRS hub — venue discovery, platform overview, admin |
+| `t1.grs.oriondevcore.com` | Tenant 1 — Connor's Public House (pilot) |
+| `t2.grs.oriondevcore.com` | Tenant 2 — next venue |
+| `tN.grs.oriondevcore.com` | Tenant N — scaled |
+
+Each tenant gets: song search, request flow, singer profiles, favourites, DJ queue, and venue-specific analytics.
+
+### The Four Pillars
+
+```
+                      ┌─────────────────────────┐
+                      │      GRS PLATFORM        │
+                      │   grs.oriondevcore.com    │
+                      ├─────────────────────────┤
+                      │  Multi-Tenant Core        │
+                      │  (t1, t2, t3... tN)      │
+                      └────────────┬────────────┘
+                                   │
+        ┌──────────────────────────┼──────────────────────────┐
+        │             │                         │             │
+   ┌────▼────┐  ┌─────▼──────┐  ┌────────▼────┐  ┌────────▼───┐
+   │ SUPA-    │  │ SINGERS    │  │ NPO HELPER  │  │ BUSINESS    │
+   │ ADS      │  │ STUDIO     │  │             │  │ ENGINE      │
+   ├──────────┤  ├────────────┤  ├─────────────┤  ├────────────┤
+   │ Venue    │  │ Recording  │  │ Fundraising │  │ Analytics   │
+   │ sponsors │  │ booth      │  │ karaoke     │  │ dashboards  │
+   │ & brand  │  │ booking    │  │ events      │  │ for venues  │
+   │ promos   │  │ + vocal    │  │ + donor     │  │ + ROI       │
+   │ in-app   │  │ coaching   │  │ recognition │  │ tracking    │
+   └──────────┘  └────────────┘  └─────────────┘  └────────────┘
+```
+
+1. **Supa-Ads** — In-app venue promotions, brand sponsorships, targeted offers
+2. **Singers Studio** — Book a recording booth, vocal coaching, take-home recordings
+3. **NPO Helper** — Charity karaoke events, fundraising drives, donor leaderboards
+4. **Business Engine** — Venue analytics: peak songs, singer retention, revenue tracking
+
+### The AI Layer
+
+AI runs across everything — three distinct engines:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     AI ORCHESTRATOR                          │
+│                  Workers AI (Cloudflare)                      │
+├─────────────────┬─────────────────────┬──────────────────────┤
+│  RECOMMENDER    │  ANALYST            │  RESEARCHER          │
+├─────────────────┼─────────────────────┼──────────────────────┤
+│ Song recs by    │ Venue insights:     │ Anonymous behaviour  │
+│ mood, history,  │ popular songs,      │ study — age, region, │
+│ and what's      │ peak times, singer  │ preferences, trends  │
+│ trending now    │ retention patterns  │ NO PII ever linked   │
+├─────────────────┴─────────────────────┴──────────────────────┤
+│                        AI GUIDE (Premium)                     │
+│        Personalised song suggestions via chat interface       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Monetisation Model
+
+| Source | Free | Premium | Notes |
+|--------|------|---------|-------|
+| Song Requests | Unlimited | Unlimited | Core free feature |
+| Supa-Faves | Yes | Yes | Free |
+| Profile | Basic | Custom | Premium unlocks mood icons, themes |
+| AI Guide | — | Yes | R1/month or one-time |
+| Supa-Ads | Seen | Removed | Venue sponsors |
+| Tips to DJ | Optional | Optional | Yoco takes 2-3% |
+| Venue Subscription | — | Tiered | Venues pay for GRS tenant |
+
+### Data Ethics
+
+- Anonymous ML research is **opt-in only**
+- Demographics collected are: age range, area code, sex, pets, family size
+- **No PII** is ever linked to research data
+- Research data stored in separate analytics D1, no foreign keys to user profiles
+- Never sold — anonymised behavioural insights only
 
 ---
 
-## Architecture
+## Current Architecture (Phase 1-2)
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
@@ -40,14 +124,14 @@ A mobile-first karaoke song request ecosystem that connects singers at Connor's 
                         └──────────────────┘
 ```
 
-## Domains
+## Domains (Current)
 
 | Domain | Purpose | Cloudflare |
 |--------|---------|------------|
 | zen-search.oriondevcore.com | Landing, search, moods, request | Pages (zen-search) |
 | userdb.oriondevcore.com | Singer profiles | Pages |
 | fav.oriondevcore.com | Favourites & history | Pages |
-| docs.oriondevcore.com | Docs, legal, FAQ | Pages (existing) |
+| docs.oriondevcore.com | Docs, legal, FAQ | Pages (orion-docs) |
 | supatraxx-api.oriondevcore.com | Backend API | Worker |
 
 ## Databases
@@ -88,7 +172,7 @@ A mobile-first karaoke song request ecosystem that connects singers at Connor's 
 - `rotationSingers` — (singerid, name, position, regular, regularid, addts)
 - `queueSongs` — (qsongid, singer, song, artist, title, discid, path, keychg, played, position)
 - `dbSongs` — (songid, Artist, Title, DiscId, Duration, path, filename, searchstring)
-- `regularSingers` — (regsingerid, Name, ph1, ph2, ph3) — Connor's regulars
+- `regularSingers` — (regsingerid, Name, ph1, ph2, ph3)
 - `regularSongs` — (regsongid, regsingerid, songid, keychg, position)
 
 ## Brand Voice
@@ -101,50 +185,59 @@ A mobile-first karaoke song request ecosystem that connects singers at Connor's 
 
 ## Phases
 
-### Phase 1 — Foundation (Current)
-- [x] Set up repo structure
-- [x] Set up CLOUDFLARE_API_TOKEN / wrangler
-- [x] Create zen-mem Python CLI memory system
-- [ ] Update API worker v4 (registration, favourites, silent requests)
-- [ ] Update zen-search (registration popup, real requests, Supa-Sing!)
-- [ ] Deploy everything
-- [ ] Restyle docs.oriondevcore.com
-- [ ] Import connors_singers.xml as seed favourites
+### Phase 1 — Foundation (Complete ✅)
+- [x] Repo structure + zen-mem CLI + git
+- [x] CLOUDFLARE_API_TOKEN / wrangler authentication
+- [x] API worker v4 (registration, favourites, silent requests, accept/reject)
+- [x] zen-search (registration modal, Supa-Sing!, favourites, real request flow)
+- [x] docs.oriondevcore.com restyled to zen design
+- [x] zen_db D1 created and wired
+- [x] supabook_db tables (users, favourites) created
 
-### Phase 2 — Profile & Favourites
-- [ ] Build userdb.oriondevcore.com (profile page)
-- [ ] Build fav.oriondevcore.com (favourites page)
-- [ ] Mood icon + colour picker
-- [ ] Milestone badges
-- [ ] Request history
+### Phase 1b — Profiles & Favourites (Current)
+- [ ] Build userdb.oriondevcore.com (profile page with mood icon picker, stats, milestones)
+- [ ] Build fav.oriondevcore.com (favourites showcase, quick re-request)
+- [ ] Import connors_singers.xml as seed favourites into D1
+- [ ] Deploy updated openkj-poller.py to Windows
+- [ ] Wire poller to `getSilentRequests` / `acceptRequest` API commands
 
-### Phase 3 — OpenKJ Deep Integration
-- [ ] Deploy updated Windows poller
-- [ ] Auto-queue for existing rotation singers
-- [ ] OKJRS popup for new singers
-- [ ] Song matching (normalized search)
+### Phase 2 — GRS Foundation
+- [ ] Build `grs.oriondevcore.com` hub page (venue discovery, platform overview)
+- [ ] Build `t1.grs.oriondevcore.com` (Connor's branded tenant portal)
+- [ ] Multi-tenant architecture: venue_id in all operational tables
+- [ ] Venue admin dashboard (queue management, singer list, stats)
 
-### Phase 4 — Premium & Monetisation
-- [ ] AI Guide (song suggestions by mood)
-- [ ] Yoco tips
-- [ ] Token / points system
-- [ ] Supa-Fan subscriptions
+### Phase 3 — AI & Intelligence
+- [ ] AI Guide (Workers AI LLM + RAG on song catalogue)
+- [ ] Trending / recommendation engine (collaborative filtering)
+- [ ] Anonymous behaviour analytics pipeline
+- [ ] AI-powered mood-to-song matching (beyond static genre mapping)
 
-### Phase 5 — AI/ML Research (Anonymous)
-- [ ] Optional demographics collection
-- [ ] Karaoke behaviour analysis
-- [ ] No PII link
+### Phase 4 — Monetisation
+- [ ] Supa-Fan subscriptions (premium profile, AI Guide, no ads)
+- [ ] Supa-Ads (venue promotions, sponsored songs)
+- [ ] Yoco tips fully operational
+- [ ] Singers Studio bookings
+- [ ] NPO Helper event system
+
+### Phase 5 — Scale
+- [ ] Multi-venue onboarding flow
+- [ ] Business Engine analytics for venue owners
+- [ ] OpenKJ poller as Cloudflare Worker (Windows dependency removed)
+- [ ] Full GRS tenant provisioning (t2, t3...)
 
 ## Technical Decisions
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| 1 | Two D1 databases (karaoke + users) | Keep operational data separate from user profiles; different backup policies |
-| 2 | D1 for zen-mem | Fast SQL queries, free tier, accessible from any machine via REST API |
-| 3 | Cloudflare Pages for frontends | Free hosting, global CDN, easy custom domains |
-| 4 | Status-based request routing | `silent`=auto-queue vs `pending`=KJ popup; clean separation |
-| 5 | No emojis in UI | Professional brand consistency across all surfaces |
-| 6 | Windows poller separate from Cloudflare | OpenKJ is desktop-only; SQLite must be accessed locally |
+| 1 | Two D1 databases (karaoke + users) | Operational data separate from user profiles |
+| 2 | D1 for zen-mem | Fast SQL queries, accessible from any machine via REST |
+| 3 | Cloudflare Pages for frontends | Free hosting, global CDN, custom domains |
+| 4 | Status-based request routing | `silent`=auto-queue vs `pending`=KJ popup |
+| 5 | No emojis in UI | Professional brand consistency |
+| 6 | Windows poller separate from Cloudflare | OpenKJ is desktop-only; SQLite local access |
+| 7 | Multi-tenant by subdomain (t1.grs, t2.grs) | Clean URL separation, venue-specific branding |
+| 8 | Workers AI for LLM features | Stays in Cloudflare ecosystem, no external API costs |
 
 ## Tools & Credentials
 
@@ -157,5 +250,4 @@ A mobile-first karaoke song request ecosystem that connects singers at Connor's 
 | zen_db ID | `3f7d5f7a-0554-4fcb-9525-e5801be336e3` |
 | Windows (ssh) | `admin@192.168.1.100` / `bolt123` |
 | GitHub | `github.com/Oriondevcore/Supa_singv1` |
-| GitHub Token | *(set in local git config)* |
 | Worker Endpoint | `supatraxx-api.oriondevcore.com` |

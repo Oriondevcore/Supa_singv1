@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Supa-Faves</title>
+  <meta name="theme-color" content="#050505">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Supa-Faves">
+  <meta name="description" content="Your favourite karaoke songs.">
+  <link rel="icon" type="image/svg+xml" href="https://asset.oriondevcore.com/00-OV-logo/SVG/kar.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700&family=Noto+Serif+Display:ital,wght@0,400;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="top-bar">
+    <a href="https://zen-search.oriondevcore.com" class="top-back" aria-label="Back to Zen Search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <span class="wordmark">SUPA-FAVES</span>
+    <span class="fav-count" id="favCount">0</span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1 class="tagline">Your songs.<br>Your favourites.</h1>
+      <p class="sub">Tap the heart on any song to add it. Come back here to sing them again.</p>
+    </section>
+
+    <section class="search-section">
+      <div class="search-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="searchInput" placeholder="Filter your favourites..." autocomplete="off">
+      </div>
+    </section>
+
+    <div id="singerPrompt" class="prompt-card">
+      <p>Who are you? Enter your stage name to see your Supa-Faves.</p>
+      <div class="prompt-input-wrap">
+        <input type="text" id="singerInput" placeholder="Your stage name" autocomplete="off">
+        <button id="singerSetBtn" class="prompt-btn">Show Faves</button>
+      </div>
+    </div>
+
+    <div id="results">
+      <div class="spinner-wrap"><div class="enso-spinner"></div></div>
+    </div>
+
+    <footer class="page-footer">
+      <div class="footer-links">
+        <a href="https://zen-search.oriondevcore.com" class="footer-link">Zen Search</a>
+        <span class="footer-dot"></span>
+        <a href="https://userdb.oriondevcore.com" class="footer-link">Supa-Profile</a>
+      </div>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
