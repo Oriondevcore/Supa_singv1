@@ -22,6 +22,7 @@
   <header class="top-bar">
     <img src="https://asset.oriondevcore.com/00-OV-logo/SVG/kar.svg" alt="" class="logo-glow" width="32" height="32">
     <span class="wordmark">ZEN SEARCH</span>
+    <button class="singer-badge" id="singerBadge" aria-label="Singer profile"></button>
     <button class="ai-orb" id="aiOrb" aria-label="AI Guide">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10" opacity="0.3"/>
@@ -63,9 +64,11 @@
     <div id="results"></div>
 
     <footer class="page-footer">
-      <p class="footer-text">Tap a song to request it. Your voice matters here.</p>
+      <p class="footer-text">Tap a song, hit SUPA-SING!, and own the stage.</p>
       <div class="footer-links">
         <a href="https://lite.oriondevcore.com" class="footer-link">Full Library</a>
+        <span class="footer-dot"></span>
+        <a href="https://fav.oriondevcore.com" class="footer-link">My Supa-Faves</a>
         <span class="footer-dot"></span>
         <a href="#" class="footer-link" id="premiumLink">Unlock AI Guide</a>
       </div>
@@ -93,6 +96,27 @@
       </div>
     </div>
   </aside>
+
+  <div class="modal-overlay" id="regModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Step into the Spotlight</h2>
+        <p class="modal-sub">One name. One number. That's all it takes to sing.</p>
+      </div>
+      <form id="regForm">
+        <div class="field">
+          <label for="regName">Stage Name</label>
+          <input type="text" id="regName" placeholder="e.g. Starwalker" required autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="regWhatsApp">WhatsApp Number</label>
+          <input type="tel" id="regWhatsApp" placeholder="e.g. +27 72 123 4567" required autocomplete="tel">
+        </div>
+        <button type="submit" id="regSubmit" class="modal-btn">Step into the Spotlight</button>
+        <button type="button" id="regCancel" class="modal-btn modal-btn-secondary">Maybe Later</button>
+      </form>
+    </div>
+  </div>
 
   <script src="app.js"></script>
   <script>

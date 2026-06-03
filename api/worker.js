@@ -1,12 +1,14 @@
-// supatraxx-api — Unified API Worker
-// Searches okjrs_songdb (224k songs via OKJRS sync), manages requests/profiles/queue
+// supatraxx-api v4.0 — Unified API Worker
+// Songs, requests, profiles, favourites, OKJRS protocol
+// DB = supatraxx_karaoke_db (songs, requests, profiles)
+// UB = supabook_users_db (users, favourites)
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
-const VERSION = '3.3.0';
+const VERSION = '4.0.0';
 const VENUE = "Connor's Public House, 46 Ashley Ave, Durban North";
 const SCHEDULE = 'Thursday 7pm-late';
 
@@ -27,6 +29,11 @@ async function getSinger(env, name) {
     s = await env.DB.prepare('SELECT * FROM singer_profiles WHERE name = ?').bind(name).first();
   }
   return s;
+}
+
+async function getUBUser(env, name) {
+  if (!name) return null;
+  return await env.UB.prepare('SELECT * FROM users WHERE name = ?').bind(name).first();
 }
 
 function calcMilestones(reqs) {
@@ -70,6 +77,7 @@ export default {
       return json({ status: 'live', service: 'SupaTraxx Karaoke API', version: VERSION, totalSongs: tot.c || 0, venue: VENUE, schedule: SCHEDULE, timestamp: new Date().toISOString() });
     }
 
+    // ── SEARCH ──
     if (path === '/search') {
       const q = (url.searchParams.get('q') || '').trim();
       const genre = (url.searchParams.get('genre') || '').trim();
@@ -114,6 +122,7 @@ export default {
         return json({ genres: [], count: 0 });
       }
     }
+
     if (path === '/stats') {
       try {
         const songs = await env.DB.prepare('SELECT COUNT(*) as c FROM okjrs_songdb').first();
@@ -170,6 +179,27 @@ export default {
       }
     }
 
+    // ── REGISTER ──
+    if (path === '/register' && method === 'POST') {
+      const { name, whatsapp, stageName, moodIcon, moodColor } = body;
+      if (!name) return json({ error: 'name is required' }, 400);
+      try {
+        const existing = await env.UB.prepare('SELECT * FROM users WHERE name = ?').bind(name).first();
+        if (existing) {
+          await env.UB.prepare('UPDATE users SET whatsapp = COALESCE(?, whatsapp), stage_name = COALESCE(?, stage_name), mood_icon = COALESCE(?, mood_icon), mood_color = COALESCE(?, mood_color), updated_at = datetime(\'now\') WHERE name = ?')
+            .bind(whatsapp || null, stageName || null, moodIcon || null, moodColor || null, name).run();
+        } else {
+          await env.UB.prepare('INSERT INTO users (name, whatsapp, stage_name, mood_icon, mood_color) VALUES (?, ?, ?, ?, ?)')
+            .bind(name, whatsapp || '', stageName || name, moodIcon || 'mic', moodColor || '#c8a44e').run();
+        }
+        await getSinger(env, name);
+        return json({ success: true, message: 'Profile saved!', name, stageName: stageName || name, whatsapp: whatsapp || '' }, 201);
+      } catch (e) {
+        return json({ error: 'Registration failed', details: e.message }, 500);
+      }
+    }
+
+    // ── REQUEST ──
     if (path === '/request' && method === 'POST') {
       const { singerName, songId, keyChange = 0 } = body;
       if (!singerName || !songId) return json({ error: 'singerName and songId are required' }, 400);
@@ -177,36 +207,65 @@ export default {
         const song = await env.DB.prepare('SELECT artist, title FROM okjrs_songdb WHERE id = ?').bind(songId).first();
         if (!song) return json({ error: 'Song not found' }, 404);
 
-        await env.DB.prepare('INSERT INTO song_requests (singer, song_id, artist, title, key_change, venue, status) VALUES (?, ?, ?, ?, ?, ?, \'pending\')')
-          .bind(singerName, songId, song.artist, song.title, keyChange, 'Connor\'s Public House').run();
+        const singer = await getSinger(env, singerName);
+        const hasPriorReqs = singer && (singer.total_requests || 0) > 0;
+        const status = hasPriorReqs ? 'silent' : 'pending';
 
-        await getSinger(env, singerName);
+        await env.DB.prepare('INSERT INTO song_requests (singer, song_id, artist, title, key_change, venue, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .bind(singerName, songId, song.artist, song.title, keyChange, VENUE, status).run();
+
         const pts = await addPoints(env, singerName, 10, 0);
 
-        return json({ success: true, message: 'Song requested!', singerName, artist: song.artist, title: song.title, keyChange, points: pts }, 201);
+        const ubUser = await getUBUser(env, singerName);
+        const needsProfile = !ubUser || !ubUser.whatsapp;
+
+        return json({
+          success: true,
+          message: 'Your jam is in the queue! Listen for your name.',
+          singerName,
+          artist: song.artist,
+          title: song.title,
+          keyChange,
+          status,
+          needsProfile,
+          points: pts
+        }, 201);
       } catch (e) {
         return json({ error: 'Request failed', details: e.message }, 500);
       }
     }
 
+    // ── PROFILE ──
     if (path === '/profile') {
       const name = url.searchParams.get('name') || body.name || '';
       if (!name) return json({ error: 'name required' }, 400);
       try {
         if (method === 'POST') {
-          const { whatsapp, action } = body;
+          const { whatsapp, stageName, moodIcon, moodColor, action } = body;
           if (action === 'delete') {
             await env.DB.prepare('DELETE FROM song_requests WHERE singer = ?').bind(name).run();
             await env.DB.prepare('DELETE FROM singer_profiles WHERE name = ?').bind(name).run();
+            await env.UB.prepare('DELETE FROM users WHERE name = ?').bind(name).run();
             return json({ success: true, message: 'Profile deleted' });
           }
           await env.DB.prepare('UPDATE singer_profiles SET whatsapp = ?, updated_at = datetime(\'now\') WHERE name = ?').bind(whatsapp || '', name).run();
+          if (stageName || moodIcon || moodColor) {
+            const existing = await env.UB.prepare('SELECT * FROM users WHERE name = ?').bind(name).first();
+            if (existing) {
+              await env.UB.prepare('UPDATE users SET stage_name = COALESCE(?, stage_name), mood_icon = COALESCE(?, mood_icon), mood_color = COALESCE(?, mood_color), updated_at = datetime(\'now\') WHERE name = ?')
+                .bind(stageName || null, moodIcon || null, moodColor || null, name).run();
+            }
+          }
         }
         const singer = await getSinger(env, name);
+        const ubUser = await getUBUser(env, name);
         const history = singer?.id ? await env.DB.prepare('SELECT artist, title, venue, key_change, created_at, status FROM song_requests WHERE singer = ? ORDER BY created_at DESC LIMIT 20').bind(name).all().catch(() => ({ results: [] })) : { results: [] };
         return json({
           name: singer.name,
           whatsapp: singer.whatsapp || '',
+          stageName: ubUser?.stage_name || singer.name,
+          moodIcon: ubUser?.mood_icon || 'mic',
+          moodColor: ubUser?.mood_color || '#c8a44e',
           points: singer.points || 0,
           tokens: singer.tokens || 0,
           total_requests: singer.total_requests || 0,
@@ -216,6 +275,41 @@ export default {
         });
       } catch (e) {
         return json({ error: 'Profile error', details: e.message }, 500);
+      }
+    }
+
+    // ── FAVOURITES ──
+    if (path === '/favourite' && method === 'POST') {
+      const { singerName, songId, artist, title, keyChange = 0 } = body;
+      if (!singerName || !songId) return json({ error: 'singerName and songId required' }, 400);
+      try {
+        await env.UB.prepare('INSERT OR IGNORE INTO favourites (singer_name, song_id, artist, title, key_change) VALUES (?, ?, ?, ?, ?)')
+          .bind(singerName, songId, artist || '', title || '', keyChange).run();
+        return json({ success: true, message: 'Favourite saved!' }, 201);
+      } catch (e) {
+        return json({ error: 'Failed to save favourite', details: e.message }, 500);
+      }
+    }
+
+    if (path === '/favourite' && method === 'DELETE') {
+      const { singerName, songId } = body;
+      if (!singerName || !songId) return json({ error: 'singerName and songId required' }, 400);
+      try {
+        await env.UB.prepare('DELETE FROM favourites WHERE singer_name = ? AND song_id = ?').bind(singerName, songId).run();
+        return json({ success: true, message: 'Favourite removed' });
+      } catch (e) {
+        return json({ error: 'Failed to remove favourite', details: e.message }, 500);
+      }
+    }
+
+    if (path === '/favourites') {
+      const name = url.searchParams.get('name') || '';
+      if (!name) return json({ error: 'name required' }, 400);
+      try {
+        const { results } = await env.UB.prepare('SELECT * FROM favourites WHERE singer_name = ? ORDER BY created_at DESC').bind(name).all();
+        return json({ count: results.length, favourites: results });
+      } catch (e) {
+        return json({ favourites: [], count: 0 });
       }
     }
 
@@ -299,6 +393,39 @@ export default {
           case 'getEntitledSystemCount':
             data.count = 1;
             break;
+
+          // ── Poller: fetch silent requests for auto-queue ──
+          case 'getSilentRequests': {
+            const { results } = await env.DB.prepare('SELECT id as request_id, artist, title, singer, cast(strftime(\'%s\', created_at) as int) as request_time, song_id, key_change FROM song_requests WHERE status = \'silent\' ORDER BY id LIMIT 50').all();
+            data.requests = results.map(r => ({ ...r, key_change: r.key_change || 0 }));
+            data.serial = getSerial(env);
+            break;
+          }
+
+          // ── Poller: accept a silent request after auto-queue ──
+          case 'acceptRequest': {
+            const rid = body.request_id;
+            if (!rid) { data.error = true; data.errorString = 'request_id required'; break; }
+            await env.DB.prepare("UPDATE song_requests SET status = 'accepted' WHERE id = ? AND status = 'silent'").bind(rid).run();
+            const req = await env.DB.prepare('SELECT singer FROM song_requests WHERE id = ?').bind(rid).first();
+            if (req?.singer) {
+              await addPoints(env, req.singer, 5, 0);
+            }
+            data.success = true;
+            data.serial = getSerial(env) + 1;
+            break;
+          }
+
+          // ── Poller: reject a silent request ──
+          case 'rejectRequest': {
+            const rj = body.request_id;
+            if (!rj) { data.error = true; data.errorString = 'request_id required'; break; }
+            await env.DB.prepare("UPDATE song_requests SET status = 'rejected' WHERE id = ? AND status = 'silent'").bind(rj).run();
+            data.success = true;
+            data.serial = getSerial(env) + 1;
+            break;
+          }
+
           case 'addSongs': {
             const songs = body.songs || [];
             let processed = 0, lastArtist = null, lastTitle = null, errs = [];
@@ -328,9 +455,9 @@ export default {
             data.serial = getSerial(env) + 1;
             break;
           case 'deleteRequest': {
-            const rid = body.request_id;
-            if (!rid) { data.error = true; data.errorString = 'request_id required'; break; }
-            await env.DB.prepare('UPDATE song_requests SET status = \'deleted\' WHERE id = ?').bind(rid).run();
+            const rid2 = body.request_id;
+            if (!rid2) { data.error = true; data.errorString = 'request_id required'; break; }
+            await env.DB.prepare('UPDATE song_requests SET status = \'deleted\' WHERE id = ?').bind(rid2).run();
             data.serial = getSerial(env) + 1;
             break;
           }
@@ -375,15 +502,19 @@ export default {
         runtime: 'Cloudflare Worker + D1',
         endpoints: {
           'GET  /health': 'Service status',
-          'GET  /search?q=&genre=&year=&decade=&limit=': 'Full-text search with genre/year/decade filters',
+          'GET  /search': 'Full-text search with filters',
           'GET  /genres': 'Genre list with song counts',
           'GET  /stats': 'Database statistics',
-          'GET  /random?limit=': 'Random songs',
+          'GET  /random': 'Random songs',
           'GET  /trending': 'Trending songs',
-          'GET  /suggestions?q=&singer=': 'AI song suggestions',
-          'GET  /profile?name=': 'Singer profile',
-          'POST /profile': 'Update or delete profile',
+          'GET  /suggestions': 'AI song suggestions',
+          'POST /register': 'Create or update singer profile',
           'POST /request': 'Submit song request',
+          'GET  /profile': 'Singer profile',
+          'POST /profile': 'Update or delete profile',
+          'POST /favourite': 'Save a favourite song',
+          'DELETE /favourite': 'Remove a favourite',
+          'GET  /favourites': 'List favourites',
           'GET  /queue': 'Pending request queue',
           'GET  /leaderboard': 'Top singers by points',
           'GET  /history': 'Song request history',

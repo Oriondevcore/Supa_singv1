@@ -10,9 +10,48 @@ const aiOrb = document.getElementById('aiOrb');
 const aiPanel = document.getElementById('aiPanel');
 const aiPanelClose = document.getElementById('aiPanelClose');
 const canvas = document.getElementById('particles');
+const regModal = document.getElementById('regModal');
+const regForm = document.getElementById('regForm');
+const regName = document.getElementById('regName');
+const regWhatsApp = document.getElementById('regWhatsApp');
+const regSubmit = document.getElementById('regSubmit');
+const singerBadge = document.getElementById('singerBadge');
 
 let genres = [];
 let debounceTimer = null;
+let pendingRequest = null;
+let singer = null;
+
+const SINGER_KEY = 'supasing_singer';
+
+function loadSinger() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SINGER_KEY));
+    if (d && d.name) singer = d;
+  } catch {}
+}
+
+function saveSinger(d) {
+  singer = d;
+  localStorage.setItem(SINGER_KEY, JSON.stringify(d));
+  updateSingerBadge();
+}
+
+function updateSingerBadge() {
+  if (singer?.stageName) {
+    singerBadge.textContent = singer.stageName;
+    singerBadge.classList.add('has-singer');
+  } else {
+    singerBadge.textContent = '';
+    singerBadge.classList.remove('has-singer');
+  }
+}
+
+function logoutSinger() {
+  localStorage.removeItem(SINGER_KEY);
+  singer = null;
+  updateSingerBadge();
+}
 
 const MOODS = [
   {
@@ -22,7 +61,7 @@ const MOODS = [
   },
   {
     id: 'nostalgic', label: 'Nostalgic',
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><path d="M4 4l4-4M4 4l4 4"/></svg>',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
     search: { decade: '1990' }
   },
   {
@@ -65,7 +104,7 @@ const KOANS = [
   'The loudest voice is not always the one that is heard.'
 ];
 
-function showToast(msg) {
+function showToast(msg, duration) {
   let el = document.querySelector('.toast');
   if (!el) {
     el = document.createElement('div');
@@ -75,7 +114,7 @@ function showToast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(el._hide);
-  el._hide = setTimeout(() => el.classList.remove('show'), 3000);
+  el._hide = setTimeout(() => el.classList.remove('show'), duration || 3000);
 }
 
 function escapeHtml(s) {
@@ -107,29 +146,24 @@ function initParticles() {
 
   for (let i = 0; i < COUNT; i++) {
     particles.push({
-      x: Math.random() * w,
-      y: Math.random() * h,
+      x: Math.random() * w, y: Math.random() * h,
       r: Math.random() * 2 + 0.5,
-      dx: (Math.random() - 0.5) * 0.3,
-      dy: -(Math.random() * 0.2 + 0.05),
+      dx: (Math.random() - 0.5) * 0.3, dy: -(Math.random() * 0.2 + 0.05),
       opacity: Math.random() * 0.5 + 0.1,
-      twinkle: Math.random() * 100,
-      twinkleSpeed: Math.random() * 2 + 1
+      twinkle: Math.random() * 100, twinkleSpeed: Math.random() * 2 + 1
     });
   }
 
   function draw() {
     ctx.clearRect(0, 0, w, h);
     particles.forEach(p => {
-      p.x += p.dx;
-      p.y += p.dy;
+      p.x += p.dx; p.y += p.dy;
       p.twinkle += p.twinkleSpeed;
       const o = p.opacity * (0.5 + 0.5 * Math.sin(p.twinkle * 0.02));
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(200, 164, 78, ${o})`;
       ctx.fill();
-
       if (p.y < -10) { p.y = h + 10; p.x = Math.random() * w; }
       if (p.x < -10) p.x = w + 10;
       if (p.x > w + 10) p.x = -10;
@@ -207,7 +241,7 @@ function showEmpty() {
 }
 
 function showLoading() {
-  resultsEl.innerHTML = `<div class="spinner-wrap"><div class="enso-spinner"></div></div>`;
+  resultsEl.innerHTML = '<div class="spinner-wrap"><div class="enso-spinner"></div></div>';
 }
 
 async function doSearch() {
@@ -217,10 +251,10 @@ async function doSearch() {
   const genre = activeGenre ? activeGenre.dataset.value : (activeMood ? MOODS.find(m => m.id === activeMood.dataset.mood)?.search.genre || '' : '');
   const decade = activeMood && !genre ? (MOODS.find(m => m.id === activeMood.dataset.mood)?.search.decade || '') : '';
 
+  genresSection.classList.add('visible');
   if (!q && !genre && !decade) { showEmpty(); return; }
 
   showLoading();
-  genresSection.classList.add('visible');
 
   const params = new URLSearchParams({ limit: '30' });
   if (q) params.set('q', q);
@@ -233,29 +267,165 @@ async function doSearch() {
     const songs = (data.results || []).map(s => ({ ...s, _id: String(s.id) }));
     renderResults(songs);
   } catch {
-    resultsEl.innerHTML = `<div class="empty-state"><p>Connection error — check your network and try again.</p></div>`;
+    resultsEl.innerHTML = '<div class="empty-state"><p>Connection error — check your network and try again.</p></div>';
   }
 }
 
+/* ─── Favourites ─── */
+let favouriteIds = new Set();
+
+async function loadFavourites() {
+  if (!singer?.name) return;
+  try {
+    const res = await fetch(`${API}/favourites?name=${encodeURIComponent(singer.name)}`);
+    const data = await res.json();
+    favouriteIds = new Set((data.favourites || []).map(f => String(f.song_id)));
+  } catch {}
+}
+
+async function toggleFavourite(songId, artist, title) {
+  if (!singer?.name) {
+    showToast('Set your Supa-Profile first to save favourites.');
+    return;
+  }
+  const key = String(songId);
+  if (favouriteIds.has(key)) {
+    await fetch(`${API}/favourite`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ singerName: singer.name, songId })
+    });
+    favouriteIds.delete(key);
+    showToast('Removed from your Supa-Faves.');
+  } else {
+    await fetch(`${API}/favourite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ singerName: singer.name, songId, artist, title })
+    });
+    favouriteIds.add(key);
+    showToast('Saved to your Supa-Faves!');
+  }
+  // Update heart icons on page
+  document.querySelectorAll(`.fav-btn[data-id="${key}"]`).forEach(b => {
+    b.classList.toggle('active', favouriteIds.has(key));
+  });
+}
+
+/* ─── Request Flow ─── */
+async function doRequest(songId, title, artist) {
+  if (!singer?.name) {
+    pendingRequest = { songId, title, artist };
+    regModal.classList.add('open');
+    regName.focus();
+    return;
+  }
+  await submitRequest(songId, title, artist);
+}
+
+async function submitRequest(songId, title, artist) {
+  try {
+    const res = await fetch(`${API}/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ singerName: singer.name, songId, keyChange: 0 })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const msgs = [
+        `"${title}" is in the queue! Listen for your name.`,
+        `Supa-choice! "${title}" is heading to the DJ.`,
+        `Your jam "${title}" is on its way to the stage.`,
+        `"${title}" queued! The mic is calling.`
+      ];
+      showToast(pickRandom(msgs), 4000);
+      if (data.status === 'pending') {
+        setTimeout(() => showToast('New to the stage? The DJ will bring you in!', 3500), 1200);
+      }
+      if (data.needsProfile) {
+        setTimeout(() => showToast('Make your profile Supa at userdb.oriondevcore.com', 5000), 2500);
+      }
+    } else {
+      showToast('Request failed. Try again or ask the DJ.', 4000);
+    }
+  } catch {
+    showToast('Could not reach the DJ. Check your connection.', 4000);
+  }
+}
+
+/* ─── Registration Modal ─── */
+regForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = regName.value.trim();
+  const whatsapp = regWhatsApp.value.trim();
+  if (!name || !whatsapp) {
+    showToast('Stage name and WhatsApp are required.');
+    return;
+  }
+  regSubmit.disabled = true;
+  regSubmit.textContent = 'Connecting...';
+  try {
+    const res = await fetch(`${API}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, whatsapp, stageName: name })
+    });
+    const data = await res.json();
+    if (data.success) {
+      saveSinger({ name, stageName: name, whatsapp });
+      regModal.classList.remove('open');
+      showToast(`Welcome to the stage, ${name}!`);
+      if (pendingRequest) {
+        await submitRequest(pendingRequest.songId, pendingRequest.title, pendingRequest.artist);
+        pendingRequest = null;
+      }
+    } else {
+      showToast('Registration failed. Try again.');
+    }
+  } catch {
+    showToast('Connection error. Check your network.');
+  }
+  regSubmit.disabled = false;
+  regSubmit.textContent = 'Step into the Spotlight';
+});
+
+document.getElementById('regCancel')?.addEventListener('click', () => {
+  regModal.classList.remove('open');
+  pendingRequest = null;
+});
+
+document.getElementById('singerBadge')?.addEventListener('click', () => {
+  if (singer) {
+    logoutSinger();
+    showToast('Signed out.');
+  }
+});
+
+/* ─── Render Results ─── */
 function renderResults(songs) {
   if (!songs.length) {
-    resultsEl.innerHTML = `<div class="empty-state"><p>Nothing matched your search. Try a different mood or keyword.</p></div>`;
+    resultsEl.innerHTML = '<div class="empty-state"><p>Nothing matched your search. Try a different mood or keyword.</p></div>';
     return;
   }
 
   let html = `<div class="section-header"><h3>Songs</h3><span>${songs.length} found</span></div>`;
   songs.forEach((song, i) => {
     const moodIcon = MOODS[i % MOODS.length].svg;
+    const sid = song._id;
+    const isFav = favouriteIds.has(sid);
     html += `
-      <div class="song-card" data-id="${song._id}" style="animation-delay:${i * 0.04}s">
+      <div class="song-card" data-id="${sid}" style="animation-delay:${i * 0.04}s">
         <div class="song-card-mood">${moodIcon}</div>
         <div class="song-card-body">
           <div class="song-card-title">${escapeHtml(song.title)}</div>
           <div class="song-card-artist">${escapeHtml(song.artist)}</div>
           ${(song.genre || song.year) ? `<div class="song-card-meta">${[song.genre, song.year].filter(Boolean).join(' / ')}</div>` : ''}
         </div>
-        <button class="song-card-action" data-action="request" data-id="${song._id}" data-title="${escapeHtml(song.title)}" data-artist="${escapeHtml(song.artist)}">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <button class="fav-btn ${isFav ? 'active' : ''}" data-id="${sid}" data-title="${escapeHtml(song.title)}" data-artist="${escapeHtml(song.artist)}" aria-label="Favourite">
+          <svg viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </button>
+        <button class="song-card-action" data-action="request" data-id="${sid}" data-title="${escapeHtml(song.title)}" data-artist="${escapeHtml(song.artist)}">
+          <span>SUPA-SING!</span>
         </button>
       </div>`;
   });
@@ -264,13 +434,21 @@ function renderResults(songs) {
   resultsEl.querySelectorAll('[data-action="request"]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      showToast(`"${btn.dataset.title}" requested!`);
+      doRequest(btn.dataset.id, btn.dataset.title, btn.dataset.artist);
     });
   });
+
+  resultsEl.querySelectorAll('.fav-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleFavourite(btn.dataset.id, btn.dataset.artist, btn.dataset.title);
+    });
+  });
+
   resultsEl.querySelectorAll('.song-card').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('[data-action="request"]')) return;
-      showToast(`Opening "${card.querySelector('.song-card-title').textContent}"...`);
+      if (e.target.closest('[data-action="request"]') || e.target.closest('.fav-btn')) return;
+      // Optional: show details or preview
     });
   });
 }
@@ -295,8 +473,12 @@ document.getElementById('premiumLink')?.addEventListener('click', e => {
 });
 
 document.querySelector('.premium-btn')?.addEventListener('click', () => {
-  showToast('Premium coming soon. Stay tuned.');
+  showToast('AI Guide is tuning up. Coming soon.');
   aiPanel.classList.remove('open');
 });
 
+/* ─── Init ─── */
+loadSinger();
+updateSingerBadge();
+loadFavourites();
 showEmpty();

@@ -1,0 +1,22 @@
+name = "supatraxx-api"
+main = "worker.js"
+compatibility_date = "2026-04-18"
+account_id = "fdd89cf30de14e1ddcfa5fbbf27581c1"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "supatraxx_karaoke_db"
+database_id = "58be4e00-fcc2-4a05-843c-3f7870868210"
+
+[[d1_databases]]
+binding = "UB"
+database_name = "supabook_users_db"
+database_id = "337f0340-cf1f-42f9-90c8-504bf68d1190"
+
+[vars]
+YOCO_SECRET = "sk_test_b5ed2388oL9E9Kx8f094f029bd71"
+OKJRS_SERIAL = "15"
+
+[triggers]
+crons = ["*/5 * * * *"]
