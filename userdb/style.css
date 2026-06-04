@@ -55,6 +55,12 @@ body {
 
 .top-back:hover { border-color: var(--gold); color: var(--gold); }
 
+.logo-glow {
+  opacity: 0.85;
+  filter: drop-shadow(0 0 12px rgba(200,164,78,0.4));
+  margin-right: 8px;
+}
+
 .wordmark {
   font-size: 13px;
   font-weight: 300;

@@ -52,10 +52,9 @@ main {
 }
 
 .logo-glow {
-  width: 36px;
-  height: 36px;
   opacity: 0.85;
   filter: drop-shadow(0 0 12px rgba(200,164,78,0.4));
+  margin-right: 8px;
 }
 
 .wordmark {

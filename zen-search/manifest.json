@@ -1,13 +1,1 @@
-{
-  "name": "Zen Search",
-  "short_name": "Zen Search",
-  "description": "A mindful way to find your next karaoke song.",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#050505",
-  "theme_color": "#050505",
-  "orientation": "portrait",
-  "icons": [
-    { "src": "https://asset.oriondevcore.com/00-OV-logo/SVG/kar.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
-  ]
-}
+{"name":"SupaSing — Zen Search","short_name":"SupaSing","start_url":".","display":"standalone","background_color":"#050505","theme_color":"#050505","icons":[{"src":"/android-chrome-192x192.png","sizes":"192x192","type":"image/png"},{"src":"/android-chrome-512x512.png","sizes":"512x512","type":"image/png"}]}
