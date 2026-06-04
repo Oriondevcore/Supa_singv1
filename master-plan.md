@@ -128,11 +128,12 @@ AI runs across everything — three distinct engines:
 
 | Domain | Purpose | Cloudflare |
 |--------|---------|------------|
-| zen-search.oriondevcore.com | Landing, search, moods, request | Pages (zen-search) |
+| supatraxx.oriondevcore.com | Song search, request, charts, history | Pages (zen-search, renamed) |
 | userdb.oriondevcore.com | Singer profiles | Pages |
 | fav.oriondevcore.com | Favourites & history | Pages |
 | docs.oriondevcore.com | Docs, legal, FAQ | Pages (orion-docs) |
 | supatraxx-api.oriondevcore.com | Backend API | Worker |
+| oriondevcore.com | Landing page, Naledi AI chat | Pages (orion-ventures) |
 
 ## Databases
 
@@ -140,6 +141,7 @@ AI runs across everything — three distinct engines:
 - `okjrs_songdb` / `okjrs_songdb_fts` — 224,956 songs (FTS5, ~447k missing from OpenKJ's 671,865)
 - `songs_metadata` — genre, year per song (only 13,100 have genre metadata)
 - `song_requests` — pending/silent/accepted/rejected/played/deleted
+- `album_art` — cached iTunes artwork URLs (artist + title UNIQUE)
 - `singer_profiles` — name, whatsapp, stage_name, points, tokens, milestones
 - `tips` — Yoco tip records
 
@@ -194,7 +196,7 @@ AI runs across everything — three distinct engines:
 - [x] zen_db D1 created and wired
 - [x] supabook_db tables (users, favourites) created
 
-### Phase 1b — Profiles & Favourites (Complete ✅)
+### Phase 1b — Profiles & Favourites + SupaTraxx Redesign (Complete ✅)
 - [x] Build userdb.oriondevcore.com (profile page with mood icon picker, stats, milestones)
 - [x] Build fav.oriondevcore.com (favourites showcase, quick re-request)
 - [x] Seed favourites from OpenKJ historySingers into D1 (4,790 favourites, 1,389 singers)
@@ -206,6 +208,14 @@ AI runs across everything — three distinct engines:
 - [x] Spilled Beer (drunk-proof search): punctuation stripping, apostrophe removal, progressive word dropping, SQL REPLACE chains
 - [x] Poller runner: VBS + `python.exe` (replaced `pythonw.exe` which didn't persist in session-0)
 - [x] End-to-end verified: ZEN-OC → silent → poller → OpenKJ queue
+- [x] SupaTraxx redesign: big-text UI (20px base), simplified layout (no moods/AI), fat genre pills
+- [x] Album artwork: iTunes API lookup + D1 cache (`album_art` table, `/artwork` endpoint)
+- [x] Anonymous charts: most-requested songs & artists (`/charts` endpoint, no user names)
+- [x] Singer history tab ("My Songs") in bottom nav, fetched from `/profile` endpoint
+- [x] Bottom nav: Search | My Songs | Faves | Profile
+- [x] `supatraxx.oriondevcore.com` custom domain assigned (pages refresh pending)
+- [x] Landing page AI binding added (NALEDI AI + MODEL for Workers AI)
+- [ ] Windows poller offline (laptop disconnected from Connor's)
 
 ### Phase 2 — GRS Foundation
 - [ ] Build `grs.oriondevcore.com` hub page (venue discovery, platform overview)
@@ -246,6 +256,9 @@ AI runs across everything — three distinct engines:
 | 8 | Workers AI for LLM features | Stays in Cloudflare ecosystem, no external API costs |
 | 9 | Spilled Beer search (LIKE + REPLACE chains) | FTS5 tokenizer can't match across punctuation; `REPLACE` chains on both query and DB side give true drunk-proof matching with progressive word dropping |
 | 10 | Poller runs via VBS + `python.exe` (not `pythonw.exe`) | `pythonw.exe` wouldn't persist in session-0 (scheduled task context); VBS runner + `python.exe` daemonizes reliably |
+| 11 | Album art via iTunes API + D1 cache | Free, no API key needed; D1 UNIQUE(artist,title) avoids repeated lookups; `300x300bb` size from `100x100bb` replacement |
+| 12 | Anonymous charts (no user names) | Privacy-first; `song_requests` GROUP BY artist/title with counts only, no singer field exposed |
+| 13 | Landing page AI binding (Pages Functions + Workers AI) | Uses `env.AI` binding in Pages Functions; falls back to REST API with CLOUDFLARE_API_TOKEN; final fallback directs to WhatsApp |
 
 ## Tools & Credentials
 

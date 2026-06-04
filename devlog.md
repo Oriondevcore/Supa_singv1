@@ -1,5 +1,27 @@
 # Dev Log — SupaSing
 
+## 2026-06-04 — SupaTraxx Redesign + Charts + Artwork
+
+### SupaTraxx (zen-search) — Full UI Redesign
+- **Big text**: base font bumped to 20px, song titles 18px bold, everything large and readable
+- **Simplified layout**: removed "moods" section, AI orb, koan — just search bar + genre chips + results
+- **Fat genre pills**: horizontal scroll, 16px bold text, gold highlight when active
+- **Album artwork**: song cards now have 72×72 thumbnail, fetched via iTunes API and cached in D1 (`album_art` table)
+- **Charts on homepage**: "Hot Right Now" section shows most-requested songs + top artists — **anonymous, no user names**
+- **Singer history tab**: bottom nav "My Songs" shows personal request history from `/profile` endpoint
+- **Bottom nav**: Search | My Songs | Faves | Profile — only shows after sign-in
+- **Click to explore**: tapping a chart card auto-searches that song; tapping a song card's artist fills search bar
+- **Big SUPASING button**: green, high-contrast, disabled briefly after request to prevent double-tap
+
+### Worker Updates (v4.1)
+- `GET /charts?days=30` — most requested songs + artists (anonymous, no names)
+- `GET /artwork?artist=X&title=Y` — iTunes album art lookup, cached in `album_art` D1 table (UNIQUE on artist+title)
+- `album_art` table created in `supatraxx_karaoke_db` via D1 migration
+- Both endpoints tested and live
+
+### Known Issue
+- Song count: OpenKJ has **671,865** songs on Windows, but only **224,956** imported to D1. ~447k missing — likely import script needs investigation.
+
 ## 2026-06-04 — Phase 1b Complete
 
 ### Session 1 — OKJRS Flow Fixes
@@ -37,8 +59,10 @@ james bay hold   → James Bay - Hold Back The River     ✓
 2. Poller picked up in 30s cycle → matched in dbSongs → queued at position 2 ✓
 3. OpenKJ queue verified: `qsongid=501`, artist "James Bay", title "Hold Back The River" ✓
 
-### Known Issue
-- Song count: OpenKJ has **671,865** songs on Windows, but only **224,956** imported to D1. ~447k missing — likely import script needs investigation.
+### Known Issues
+- **Windows poller offline**: laptop disconnected from Connor's — poller (`openkj-poller.py`) will not run until reconnected. Silent requests will not auto-queue.
+- **Song count mismatch**: OpenKJ has **671,865** songs on Windows, but only **224,956** imported to D1. ~447k missing — likely import script needs investigation.
+- **Landing page AI binding**: `AI` + `AI_CHAT` + `MODEL` bindings added in Dashboard but Naledi chat function may need environment variable `CLOUDFLARE_API_TOKEN` for the REST fallback path if binding doesn't connect.
 
 ## 2026-06-03 — Phase 1a Launch
 
