@@ -15,56 +15,52 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <header class="top-bar">
-    <img src="/SS-LOGO.svg" alt="SupaSing" class="logo-glow" width="36" height="36">
-    <button class="singer-badge" id="singerBadge" aria-label="Singer profile"></button>
+    <div class="top-left">
+      <img src="/SS-LOGO.svg" alt="SupaSing" class="logo" width="40" height="40">
+    </div>
+    <button class="singer-badge" id="singerBadge">Sign In</button>
   </header>
 
   <main>
-    <section class="hero">
-      <h1 class="tagline">What are you singing?</h1>
-    </section>
+    <div class="search-box">
+      <input type="search" id="searchInput" placeholder="Search artist or song..." autocomplete="off">
+    </div>
 
-    <section class="search-section">
-      <div class="search-wrap">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text" id="searchInput" placeholder="Search song or artist..." autocomplete="off">
-      </div>
-    </section>
+    <div class="genre-row" id="genreRow"></div>
 
-    <section class="mood-section" id="moodSection">
-      <h2 class="section-title">How do you feel?</h2>
-      <div class="mood-grid" id="moodGrid"></div>
-    </section>
-
-    <section class="genres-section" id="genresSection">
-      <p class="section-label">or pick a genre</p>
-      <div class="chip-scroll" id="genreChips"></div>
-    </section>
-
-    <div id="results"></div>
-
-    <footer class="page-footer">
-      <p class="footer-text">Pick a song and sing.</p>
-      <div class="footer-links">
-        <a href="https://fav.oriondevcore.com" class="footer-link">My Favourites</a>
-        <a href="https://userdb.oriondevcore.com" class="footer-link">My Profile</a>
-      </div>
-    </footer>
+    <div id="content"></div>
   </main>
+
+  <div class="bottom-bar" id="bottomBar">
+    <button class="bottom-tab active" data-tab="search">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+    </button>
+    <button class="bottom-tab" data-tab="history" id="historyTabBtn">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>My Songs</span>
+    </button>
+    <a href="https://fav.oriondevcore.com" class="bottom-tab" target="_blank">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <span>Faves</span>
+    </a>
+    <a href="https://userdb.oriondevcore.com" class="bottom-tab" target="_blank">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profile</span>
+    </a>
+  </div>
 
   <div class="modal-overlay" id="regModal">
     <div class="modal">
       <div class="modal-header">
-        <h2>Let's Go!</h2>
-        <p class="modal-sub">Tell us your name to get singing.</p>
+        <h2>One More Thing...</h2>
+        <p class="modal-sub">Drop your name so the DJ knows who to call.</p>
       </div>
       <form id="regForm">
         <div class="field">
@@ -75,11 +71,13 @@
           <label for="regWhatsApp">WhatsApp Number</label>
           <input type="tel" id="regWhatsApp" placeholder="e.g. +27 72 123 4567" required autocomplete="tel">
         </div>
-        <button type="submit" id="regSubmit" class="modal-btn">Let's Go!</button>
-        <button type="button" id="regCancel" class="modal-btn modal-btn-secondary">Maybe Later</button>
+        <button type="submit" id="regSubmit" class="btn btn-primary">SUPASING!</button>
+        <button type="button" id="regCancel" class="btn btn-secondary">Maybe Later</button>
       </form>
     </div>
   </div>
+
+  <div class="toast" id="toast"></div>
 
   <script src="app.js"></script>
 </body>

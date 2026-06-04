@@ -385,6 +385,51 @@ export default {
       }
     }
 
+    // ── CHARTS (anonymous — most requested songs & artists) ──
+    if (path === '/charts') {
+      try {
+        const days = parseInt(url.searchParams.get('days') || '7', 10);
+        const timeSql = days > 0 ? `created_at > datetime('now', '-${days} days') AND` : '';
+        const songs = await env.DB.prepare(`SELECT artist, title, COUNT(*) as requests FROM song_requests WHERE ${timeSql} status IN ('played', 'accepted') GROUP BY artist, title ORDER BY requests DESC LIMIT 20`).all().catch(() => ({ results: [] }));
+        const artists = await env.DB.prepare(`SELECT artist, COUNT(*) as requests FROM song_requests WHERE ${timeSql} status IN ('played', 'accepted') GROUP BY artist ORDER BY requests DESC LIMIT 20`).all().catch(() => ({ results: [] }));
+        return json({ songs: songs.results || [], artists: artists.results || [] });
+      } catch (e) {
+        return json({ songs: [], artists: [] });
+      }
+    }
+
+    // ── ARTWORK (iTunes lookup + D1 cache) ──
+    if (path === '/artwork') {
+      const artist = (url.searchParams.get('artist') || '').trim();
+      const title = (url.searchParams.get('title') || '').trim();
+      if (!artist || !title) return json({ error: 'artist and title required' }, 400);
+      try {
+        // Check cache first
+        const cached = await env.DB.prepare('SELECT artwork_url FROM album_art WHERE artist = ? AND title = ?').bind(artist, title).first();
+        if (cached?.artwork_url) return json({ artist, title, artwork_url: cached.artwork_url });
+
+        // Query iTunes API
+        const searchTerm = encodeURIComponent(`${artist} ${title}`.substring(0, 200));
+        const resp = await fetch(`https://itunes.apple.com/search?term=${searchTerm}&limit=1&entity=song`, {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(5000)
+        });
+        const data = await resp.json();
+        let artworkUrl = null;
+        if (data?.results?.length > 0) {
+          artworkUrl = data.results[0].artworkUrl100?.replace('100x100bb', '300x300bb') || null;
+        }
+
+        // Cache result (even null to avoid repeated misses)
+        await env.DB.prepare('INSERT OR REPLACE INTO album_art (artist, title, artwork_url, updated_at) VALUES (?, ?, ?, datetime(\'now\'))')
+          .bind(artist, title, artworkUrl).run();
+
+        return json({ artist, title, artwork_url: artworkUrl });
+      } catch (e) {
+        return json({ artist, title, artwork_url: null, error: e.message });
+      }
+    }
+
     if (path === '/queue') {
       try {
         const { results } = await env.DB.prepare('SELECT * FROM song_requests WHERE status = \'pending\' ORDER BY created_at ASC LIMIT 50').all();
@@ -577,6 +622,8 @@ export default {
           'GET  /favourites': 'List favourites',
           'GET  /queue': 'Pending request queue',
           'GET  /leaderboard': 'Top singers by points',
+          'GET  /charts': 'Top requested songs & artists (anonymous)',
+          'GET  /artwork': 'Album art lookup (iTunes + cache)',
           'GET  /history': 'Song request history',
           'POST /tip': 'Tip the DJ (Yoco)',
           'POST /api': 'OpenKJ Request Server protocol',

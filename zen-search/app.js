@@ -1,29 +1,29 @@
 const API = 'https://supatraxx-api.orion269.workers.dev';
 
-const searchInput = document.getElementById('searchInput');
-const resultsEl = document.getElementById('results');
-const moodGrid = document.getElementById('moodGrid');
-const genreChips = document.getElementById('genreChips');
-const genresSection = document.getElementById('genresSection');
-const regModal = document.getElementById('regModal');
-const regForm = document.getElementById('regForm');
-const regName = document.getElementById('regName');
-const regWhatsApp = document.getElementById('regWhatsApp');
-const regSubmit = document.getElementById('regSubmit');
-const singerBadge = document.getElementById('singerBadge');
+const $ = id => document.getElementById(id);
+const searchInput = $('searchInput');
+const content = $('content');
+const genreRow = $('genreRow');
+const regModal = $('regModal');
+const regForm = $('regForm');
+const regName = $('regName');
+const regWhatsApp = $('regWhatsApp');
+const regSubmit = $('regSubmit');
+const singerBadge = $('singerBadge');
+const toast = $('toast');
+const bottomBar = $('bottomBar');
 
-let genres = [];
-let debounceTimer = null;
-let pendingRequest = null;
 let singer = null;
-
+let genres = [];
+let favouriteIds = new Set();
+let pendingRequest = null;
+let artworkCache = new Map();
+let debounceTimer = null;
 const SINGER_KEY = 'supasing_singer';
 
+/* ─── Singer ─── */
 function loadSinger() {
-  try {
-    const d = JSON.parse(localStorage.getItem(SINGER_KEY));
-    if (d && d.name) singer = d;
-  } catch {}
+  try { const d = JSON.parse(localStorage.getItem(SINGER_KEY)); if (d?.name) singer = d; } catch {}
 }
 
 function saveSinger(d) {
@@ -33,173 +33,285 @@ function saveSinger(d) {
 }
 
 function updateSingerBadge() {
-  if (singer?.stageName) {
-    singerBadge.textContent = singer.stageName;
-    singerBadge.classList.add('has-singer');
+  singerBadge.textContent = singer?.stageName || 'Sign In';
+  singerBadge.classList.toggle('has-singer', !!singer?.stageName);
+}
+
+singerBadge.addEventListener('click', () => {
+  if (singer) {
+    localStorage.removeItem(SINGER_KEY);
+    singer = null;
+    favouriteIds = new Set();
+    updateSingerBadge();
+    showToast('Signed out');
+    switchTab('search');
+    loadCharts();
   } else {
-    singerBadge.textContent = '';
-    singerBadge.classList.remove('has-singer');
+    promptSignIn();
   }
+});
+
+function promptSignIn() {
+  pendingRequest = null;
+  regName.value = '';
+  regWhatsApp.value = '';
+  regModal.classList.add('open');
+  regName.focus();
 }
 
-function logoutSinger() {
-  localStorage.removeItem(SINGER_KEY);
-  singer = null;
-  updateSingerBadge();
+/* ─── Toast ─── */
+function showToast(msg, duration = 3000) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._hide);
+  toast._hide = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
-const MOODS = [
-  {
-    id: 'energetic', label: 'Energetic',
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
-    search: { genre: 'Rock' }
-  },
-  {
-    id: 'nostalgic', label: 'Nostalgic',
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-    search: { decade: '1990' }
-  },
-  {
-    id: 'romantic', label: 'Romantic',
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
-    search: { genre: 'Ballad' }
-  },
-  {
-    id: 'melancholic', label: 'Melancholic',
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>',
-    search: { genre: 'Blues' }
-  },
-  {
-    id: 'happy', label: 'Happy',
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
-    search: { genre: 'Pop' }
-  },
-  {
-    id: 'zen', label: 'Chill',
-    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>',
-    search: { genre: 'Jazz' }
-  }
-];
-
-function showToast(msg, duration) {
-  let el = document.querySelector('.toast');
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'toast';
-    document.body.appendChild(el);
-  }
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(el._hide);
-  el._hide = setTimeout(() => el.classList.remove('show'), duration || 3000);
-}
-
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-/* ─── Moods ─── */
-MOODS.forEach(m => {
-  const btn = document.createElement('button');
-  btn.className = 'mood-btn';
-  btn.dataset.mood = m.id;
-  btn.innerHTML = `${m.svg}<span>${m.label}</span>`;
-  btn.addEventListener('click', () => {
-    const siblings = moodGrid.querySelectorAll('.mood-btn');
-    if (btn.classList.contains('active')) {
-      btn.classList.remove('active');
-      if (!searchInput.value.trim()) { showEmpty(); return; }
-      doSearch();
-      return;
+/* ─── Register Modal ─── */
+regForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = regName.value.trim();
+  const whatsapp = regWhatsApp.value.trim();
+  if (!name || !whatsapp) { showToast('Name and WhatsApp needed'); return; }
+  regSubmit.disabled = true;
+  regSubmit.textContent = 'Sending...';
+  try {
+    const res = await fetch(`${API}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, whatsapp, stageName: name })
+    });
+    const data = await res.json();
+    if (data.success) {
+      saveSinger({ name, stageName: name, whatsapp });
+      regModal.classList.remove('open');
+      showToast('You\'re signed in!');
+      await loadFavourites();
+      if (pendingRequest) {
+        await submitRequest(pendingRequest.songId, pendingRequest.title, pendingRequest.artist);
+        pendingRequest = null;
+      }
+    } else {
+      showToast('Registration failed');
     }
-    siblings.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    doSearch();
-  });
-  moodGrid.appendChild(btn);
+  } catch { showToast('Connection error'); }
+  regSubmit.disabled = false;
+  regSubmit.textContent = 'SUPASING!';
+});
+
+$('regCancel')?.addEventListener('click', () => {
+  regModal.classList.remove('open');
+  pendingRequest = null;
 });
 
 /* ─── Genres ─── */
-function loadGenres() {
-  fetch(`${API}/genres`)
-    .then(r => r.json())
-    .then(d => {
-      genres = (d.genres || []).map(g => g.genre).filter(Boolean);
-      renderGenreChips();
-    })
-    .catch(() => {
-      genres = ['Pop', 'Rock', 'Country', 'R&B', 'Jazz', 'Blues', 'Soul'];
-      renderGenreChips();
-    });
+async function loadGenres() {
+  try {
+    const res = await fetch(`${API}/genres`);
+    const data = await res.json();
+    genres = (data.genres || []).map(g => g.genre).filter(Boolean);
+  } catch {
+    genres = ['Pop', 'Rock', 'Country', 'R&B', 'Jazz', 'Blues', 'Soul'];
+  }
+  renderGenreChips();
 }
 
 function renderGenreChips() {
-  genreChips.innerHTML = '';
-  genres.forEach(g => {
+  genreRow.innerHTML = '';
+  const top = genres.slice(0, 8);
+  top.forEach(g => {
     const chip = document.createElement('button');
-    chip.className = 'chip';
+    chip.className = 'genre-chip';
     chip.textContent = g;
-    chip.dataset.value = g;
     chip.addEventListener('click', () => {
-      const siblings = genreChips.querySelectorAll('.chip');
-      if (chip.classList.contains('active')) {
-        chip.classList.remove('active');
-      } else {
-        siblings.forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-      }
+      const siblings = genreRow.querySelectorAll('.genre-chip');
+      chip.classList.toggle('active');
+      siblings.forEach(c => { if (c !== chip) c.classList.remove('active'); });
       doSearch();
     });
-    genreChips.appendChild(chip);
+    genreRow.appendChild(chip);
   });
 }
-loadGenres();
 
-/* ─── Search ─── */
-function showEmpty() {
-  genresSection.classList.remove('visible');
-  resultsEl.innerHTML = `
-    <div class="empty-state">
-      <p>Pick a mood, choose a genre,<br>or search for a song.</p>
-    </div>`;
-}
-
-function showLoading() {
-  resultsEl.innerHTML = '<div class="spinner-wrap"><div class="enso-spinner"></div></div>';
-}
-
-async function doSearch() {
-  const q = searchInput.value.trim();
-  const activeMood = moodGrid.querySelector('.mood-btn.active');
-  const activeGenre = genreChips.querySelector('.chip.active');
-  const genre = activeGenre ? activeGenre.dataset.value : (activeMood ? MOODS.find(m => m.id === activeMood.dataset.mood)?.search.genre || '' : '');
-  const decade = activeMood && !genre ? (MOODS.find(m => m.id === activeMood.dataset.mood)?.search.decade || '') : '';
-
-  genresSection.classList.add('visible');
-  if (!q && !genre && !decade) { showEmpty(); return; }
-
-  showLoading();
-
-  const params = new URLSearchParams({ limit: '30' });
-  if (q) params.set('q', q);
-  if (genre) params.set('genre', genre);
-  if (decade) params.set('decade', decade);
-
+/* ─── Charts ─── */
+async function loadCharts() {
+  content.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
   try {
-    const res = await fetch(`${API}/search?${params}`);
+    const res = await fetch(`${API}/charts?days=30`);
     const data = await res.json();
-    const songs = (data.results || []).map(s => ({ ...s, _id: String(s.id) }));
-    renderResults(songs);
+    renderCharts(data);
   } catch {
-    resultsEl.innerHTML = '<div class="empty-state"><p>Connection error — check your network.</p></div>';
+    content.innerHTML = '<div class="empty-state"><p>Could not load trending songs.</p></div>';
   }
 }
 
-/* ─── Favourites ─── */
-let favouriteIds = new Set();
+function renderCharts(data) {
+  const songs = data.songs || [];
+  const artists = data.artists || [];
+  if (!songs.length && !artists.length) {
+    content.innerHTML = '<div class="empty-state"><p>No requests yet — be the first!</p></div>';
+    return;
+  }
+  let html = '<div class="charts-section">';
+  html += '<div class="charts-header">Hot Right Now</div>';
+  if (songs.length) {
+    html += '<div class="chart-subsection"><h3>Most Requested Songs</h3>';
+    songs.slice(0, 10).forEach((s, i) => {
+      html += `
+        <div class="chart-card" data-artist="${esc(s.artist)}" data-title="${esc(s.title)}">
+          <div class="chart-rank">${i + 1}</div>
+          <div class="chart-body">
+            <div class="chart-title">${esc(s.title)}</div>
+            <div class="chart-artist">${esc(s.artist)}</div>
+          </div>
+          <div class="chart-reqs">${s.requests}x</div>
+        </div>`;
+    });
+    html += '</div>';
+  }
+  if (artists.length) {
+    html += '<div class="chart-subsection"><h3>Top Artists</h3>';
+    artists.slice(0, 10).forEach((a, i) => {
+      html += `
+        <div class="chart-card">
+          <div class="chart-rank">${i + 1}</div>
+          <div class="chart-body">
+            <div class="chart-title">${esc(a.artist)}</div>
+          </div>
+          <div class="chart-reqs">${a.requests}x</div>
+        </div>`;
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  content.innerHTML = html;
 
+  // Click chart card to search that song
+  content.querySelectorAll('.chart-card[data-artist]').forEach(el => {
+    el.addEventListener('click', () => {
+      searchInput.value = `${el.dataset.artist} ${el.dataset.title}`;
+      doSearch();
+      searchInput.focus();
+    });
+  });
+}
+
+/* ─── Search ─── */
+function doSearch() {
+  const q = searchInput.value.trim();
+  const activeGenre = genreRow.querySelector('.genre-chip.active');
+  const genre = activeGenre ? activeGenre.textContent : '';
+
+  if (!q && !genre) { loadCharts(); return; }
+
+  content.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+
+  const params = new URLSearchParams({ limit: '50' });
+  if (q) params.set('q', q);
+  if (genre) params.set('genre', genre);
+
+  fetch(`${API}/search?${params}`)
+    .then(r => r.json())
+    .then(data => {
+      const songs = (data.results || []).map(s => ({ ...s, _id: String(s.id) }));
+      renderResults(songs);
+    })
+    .catch(() => {
+      content.innerHTML = '<div class="empty-state"><p>Connection error.</p></div>';
+    });
+}
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(doSearch, 300);
+});
+
+searchInput.addEventListener('focus', () => {
+  if (!searchInput.value.trim() && !genreRow.querySelector('.chip.active')) {
+    // keep showing charts
+  }
+});
+
+/* ─── Artwork ─── */
+async function loadArtwork(artist, title, imgEl) {
+  const key = `${artist}|${title}`;
+  if (artworkCache.has(key)) {
+    const url = artworkCache.get(key);
+    if (url) imgEl.src = url;
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/artwork?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`);
+    const data = await res.json();
+    artworkCache.set(key, data.artwork_url || null);
+    if (data.artwork_url) imgEl.src = data.artwork_url;
+  } catch { /* no artwork */ }
+}
+
+/* ─── Render Results ─── */
+function renderResults(songs) {
+  if (!songs.length) {
+    content.innerHTML = '<div class="empty-state"><p>Nothing found — try different words.</p></div>';
+    return;
+  }
+  let html = `<div class="results-count">${songs.length} songs</div>`;
+  songs.forEach((song, i) => {
+    const sid = song._id;
+    const isFav = favouriteIds.has(sid);
+    html += `
+      <div class="song-card" data-id="${sid}" style="animation-delay:${i * 0.03}s">
+        <div class="song-art">
+          <img data-artwork="${esc(song.artist)}||${esc(song.title)}" alt="" loading="lazy">
+          <svg class="song-art-placeholder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <div class="song-body">
+          <div class="song-title">${esc(song.title)}</div>
+          <div class="song-artist">${esc(song.artist)}</div>
+          ${(song.genre || song.year) ? `<div class="song-meta">${[song.genre, song.year].filter(Boolean).join(' / ')}</div>` : ''}
+        </div>
+        <div class="song-actions">
+          <button class="btn-fav ${isFav ? 'active' : ''}" data-id="${sid}" data-title="${esc(song.title)}" data-artist="${esc(song.artist)}" aria-label="Favourite">
+            <svg viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
+          <button class="btn-sing" data-action="request" data-id="${sid}" data-title="${esc(song.title)}" data-artist="${esc(song.artist)}">SING</button>
+        </div>
+      </div>`;
+  });
+  content.innerHTML = html;
+
+  // Lazy-load artwork
+  content.querySelectorAll('img[data-artwork]').forEach(img => {
+    const [artist, title] = img.dataset.artwork.split('||');
+    loadArtwork(artist, title, img);
+  });
+
+  // Request buttons
+  content.querySelectorAll('[data-action="request"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      doRequest(btn.dataset.id, btn.dataset.title, btn.dataset.artist, btn);
+    });
+  });
+
+  // Fav buttons
+  content.querySelectorAll('.btn-fav').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleFavourite(btn.dataset.id, btn.dataset.artist, btn.dataset.title);
+    });
+  });
+
+  // Click card to search same artist
+  content.querySelectorAll('.song-card').forEach(card => {
+    card.addEventListener('click', e => {
+      if (e.target.closest('.btn-fav') || e.target.closest('.btn-sing')) return;
+      const artist = card.querySelector('.song-artist')?.textContent;
+      if (artist) { searchInput.value = artist; doSearch(); }
+    });
+  });
+}
+
+/* ─── Favourites ─── */
 async function loadFavourites() {
   if (!singer?.name) return;
   try {
@@ -211,7 +323,8 @@ async function loadFavourites() {
 
 async function toggleFavourite(songId, artist, title) {
   if (!singer?.name) {
-    showToast('Set your profile first to save favourites.');
+    pendingRequest = { songId, artist, title };
+    promptSignIn();
     return;
   }
   const key = String(songId);
@@ -222,7 +335,7 @@ async function toggleFavourite(songId, artist, title) {
       body: JSON.stringify({ singerName: singer.name, songId })
     });
     favouriteIds.delete(key);
-    showToast('Removed from favourites.');
+    showToast('Removed from favourites');
   } else {
     await fetch(`${API}/favourite`, {
       method: 'POST',
@@ -230,22 +343,24 @@ async function toggleFavourite(songId, artist, title) {
       body: JSON.stringify({ singerName: singer.name, songId, artist, title })
     });
     favouriteIds.add(key);
-    showToast('Saved to favourites!');
+    showToast('Saved!');
   }
-  document.querySelectorAll(`.fav-btn[data-id="${key}"]`).forEach(b => {
+  content.querySelectorAll(`.btn-fav[data-id="${key}"]`).forEach(b => {
     b.classList.toggle('active', favouriteIds.has(key));
+    b.querySelector('svg').setAttribute('fill', favouriteIds.has(key) ? 'currentColor' : 'none');
   });
 }
 
 /* ─── Request ─── */
-async function doRequest(songId, title, artist) {
+async function doRequest(songId, title, artist, btn) {
   if (!singer?.name) {
     pendingRequest = { songId, title, artist };
-    regModal.classList.add('open');
-    regName.focus();
+    promptSignIn();
     return;
   }
+  if (btn) { btn.textContent = '...'; btn.disabled = true; }
   await submitRequest(songId, title, artist);
+  if (btn) setTimeout(() => { btn.textContent = 'SING'; btn.disabled = false; }, 2000);
 }
 
 async function submitRequest(songId, title, artist) {
@@ -257,132 +372,95 @@ async function submitRequest(songId, title, artist) {
     });
     const data = await res.json();
     if (data.success) {
-      const msgs = [
-        `"${title}" is in the queue!`,
-        `"${title}" heading to the DJ!`,
-        `"${title}" — you're up next!`,
-        `"${title}" queued!`
-      ];
-      showToast(pickRandom(msgs), 4000);
-      if (data.status === 'pending') {
-        setTimeout(() => showToast('First time? The DJ will call you up!', 3500), 1200);
-      }
+      showToast(`${title} — you're in the queue!`, 4000);
       if (data.needsProfile) {
-        setTimeout(() => showToast('Make your profile at userdb.oriondevcore.com', 5000), 2500);
+        setTimeout(() => showToast('Finish your profile at userdb.oriondevcore.com', 4000), 1500);
       }
     } else {
-      showToast('Request failed. Ask the DJ.', 4000);
+      showToast('Request failed — ask the DJ', 3000);
     }
   } catch {
-    showToast('Could not reach the DJ.', 4000);
+    showToast('Could not reach the DJ', 3000);
   }
 }
 
-function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+/* ─── History ─── */
+let historyLoaded = false;
 
-/* ─── Registration Modal ─── */
-regForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  const name = regName.value.trim();
-  const whatsapp = regWhatsApp.value.trim();
-  if (!name || !whatsapp) {
-    showToast('Name and WhatsApp are required.');
+async function loadHistory() {
+  if (!singer?.name) {
+    content.innerHTML = '<div class="empty-state"><p>Sign in to see your songs.</p><button class="btn-sing" onclick="promptSignIn()" style="margin-top:16px;padding:14px 32px;font-size:16px">Sign In</button></div>';
     return;
   }
-  regSubmit.disabled = true;
-  regSubmit.textContent = 'Connecting...';
+  content.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
   try {
-    const res = await fetch(`${API}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, whatsapp, stageName: name })
-    });
+    const res = await fetch(`${API}/profile?name=${encodeURIComponent(singer.name)}`);
     const data = await res.json();
-    if (data.success) {
-      saveSinger({ name, stageName: name, whatsapp });
-      regModal.classList.remove('open');
-      showToast(`Welcome, ${name}!`);
-      if (pendingRequest) {
-        await submitRequest(pendingRequest.songId, pendingRequest.title, pendingRequest.artist);
-        pendingRequest = null;
-      }
-    } else {
-      showToast('Registration failed.');
-    }
+    const history = data.history || [];
+    renderHistory(history);
   } catch {
-    showToast('Connection error.');
+    content.innerHTML = '<div class="empty-state"><p>Could not load history.</p></div>';
   }
-  regSubmit.disabled = false;
-  regSubmit.textContent = "Let's Go!";
-});
+}
 
-document.getElementById('regCancel')?.addEventListener('click', () => {
-  regModal.classList.remove('open');
-  pendingRequest = null;
-});
-
-document.getElementById('singerBadge')?.addEventListener('click', () => {
-  if (singer) {
-    logoutSinger();
-    showToast('Signed out.');
-  }
-});
-
-/* ─── Render Results ─── */
-function renderResults(songs) {
-  if (!songs.length) {
-    resultsEl.innerHTML = '<div class="empty-state"><p>Nothing found. Try a different search.</p></div>';
+function renderHistory(requests) {
+  if (!requests.length) {
+    content.innerHTML = '<div class="history-empty"><p>You haven\'t requested any songs yet.</p><button class="btn-sing" onclick="switchTab(\'search\')" style="padding:14px 32px;font-size:16px">Find a Song</button></div>';
     return;
   }
-
-  let html = `<div class="section-header"><h3>Songs</h3><span>${songs.length} found</span></div>`;
-  songs.forEach((song, i) => {
-    const sid = song._id;
-    const isFav = favouriteIds.has(sid);
+  let html = '<div class="history-section">';
+  html += `<div class="results-count">${requests.length} songs</div>`;
+  requests.forEach(r => {
+    const time = r.created_at ? new Date(r.created_at + 'Z').toLocaleDateString('en-ZA', { month: 'short', day: 'numeric' }) : '';
     html += `
-      <div class="song-card" data-id="${sid}" style="animation-delay:${i * 0.04}s">
-        <div class="song-card-body">
-          <div class="song-card-title">${escapeHtml(song.title)}</div>
-          <div class="song-card-artist">${escapeHtml(song.artist)}</div>
-          ${(song.genre || song.year) ? `<div class="song-card-meta">${[song.genre, song.year].filter(Boolean).join(' / ')}</div>` : ''}
+      <div class="history-item">
+        <div class="history-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <button class="fav-btn ${isFav ? 'active' : ''}" data-id="${sid}" data-title="${escapeHtml(song.title)}" data-artist="${escapeHtml(song.artist)}" aria-label="Favourite">
-          <svg viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        </button>
-        <button class="song-card-action" data-action="request" data-id="${sid}" data-title="${escapeHtml(song.title)}" data-artist="${escapeHtml(song.artist)}">
-          <span>SING</span>
-        </button>
+        <div class="history-body">
+          <div class="history-title">${esc(r.title)}</div>
+          <div class="history-artist">${esc(r.artist)}</div>
+        </div>
+        <div class="history-when">${time}</div>
       </div>`;
   });
-  resultsEl.innerHTML = html;
-
-  resultsEl.querySelectorAll('[data-action="request"]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      doRequest(btn.dataset.id, btn.dataset.title, btn.dataset.artist);
-    });
-  });
-
-  resultsEl.querySelectorAll('.fav-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleFavourite(btn.dataset.id, btn.dataset.artist, btn.dataset.title);
-    });
-  });
+  html += '</div>';
+  content.innerHTML = html;
 }
 
-/* ─── Input ─── */
-searchInput.addEventListener('input', () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(doSearch, 300);
+/* ─── Tab switching ─── */
+function switchTab(tab) {
+  bottomBar.querySelectorAll('.bottom-tab').forEach(t => t.classList.remove('active'));
+  const btn = bottomBar.querySelector(`[data-tab="${tab}"]`);
+  if (btn) btn.classList.add('active');
+
+  if (tab === 'search') {
+    const q = searchInput.value.trim();
+    const genre = genreRow.querySelector('.genre-chip.active');
+    genreRow.style.display = 'flex';
+    searchInput.style.display = 'block';
+    if (q || genre) doSearch(); else loadCharts();
+  } else if (tab === 'history') {
+    genreRow.style.display = 'none';
+    searchInput.style.display = 'none';
+    loadHistory();
+  }
+}
+
+bottomBar.querySelectorAll('.bottom-tab[data-tab]').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
 });
 
-searchInput.addEventListener('focus', () => {
-  genresSection.classList.add('visible');
-});
+/* ─── Escape HTML ─── */
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
 
 /* ─── Init ─── */
 loadSinger();
 updateSingerBadge();
+loadGenres();
 loadFavourites();
-showEmpty();
+loadCharts();
