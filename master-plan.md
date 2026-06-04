@@ -137,8 +137,8 @@ AI runs across everything — three distinct engines:
 ## Databases
 
 ### supatraxx_karaoke_db (D1) — `58be4e00-fcc2-4a05-843c-3f7870868210`
-- `okjrs_songdb` / `okjrs_songdb_fts` — 224k songs (FTS5 full-text search)
-- `songs_metadata` — genre, year per song
+- `okjrs_songdb` / `okjrs_songdb_fts` — 224,956 songs (FTS5, ~447k missing from OpenKJ's 671,865)
+- `songs_metadata` — genre, year per song (only 13,100 have genre metadata)
 - `song_requests` — pending/silent/accepted/rejected/played/deleted
 - `singer_profiles` — name, whatsapp, stage_name, points, tokens, milestones
 - `tips` — Yoco tip records
@@ -160,13 +160,13 @@ AI runs across everything — three distinct engines:
 ### How requests flow into OpenKJ
 
 1. **Singer uses zen-search** → taps Supa-Sing! → POST /request
-2. **API checks** if singer has a profile:
-   - **Has profile (existing singer)** → `status = 'silent'` → Windows poller sees it
-   - **No profile (new singer)** → `status = 'pending'` → OKJRS popup
+2. **API checks** singer's `total_requests`:
+   - **`total_requests > 0` (existing singer)** → `status = 'silent'` → Windows poller sees it
+   - **`total_requests === 0` (new singer)** → `status = 'pending'` → OKJRS popup
 3. **Windows poller** (`openkj-poller.py`):
    - Polls `getSilentRequests` every 30s
    - Finds singer in `rotationSingers` → auto-inserts into `queueSongs`
-   - Singer not in rotation → leaves pending for KJ to handle
+   - Singer **not** in rotation → calls `revertToPending` API → flips back to pending → KJ gets popup
 
 ### Database tables (OpenKJ SQLite)
 - `rotationSingers` — (singerid, name, position, regular, regularid, addts)
@@ -201,6 +201,11 @@ AI runs across everything — three distinct engines:
 - [x] Deploy updated openkj-poller.py to Windows (scheduled task, runs at logon)
 - [x] Wire poller to `getSilentRequests` / `acceptRequest` API commands
 - [x] Fix OKJRS serial: dynamic serial from D1 max ID (was static env var, broke popup notification)
+- [x] Branding: favicons, SS-LOGO.svg, manifest.json, `.logo-glow` CSS in all frontends
+- [x] `revertToPending` API command + poller logic (silent → pending if singer not in rotation)
+- [x] Spilled Beer (drunk-proof search): punctuation stripping, apostrophe removal, progressive word dropping, SQL REPLACE chains
+- [x] Poller runner: VBS + `python.exe` (replaced `pythonw.exe` which didn't persist in session-0)
+- [x] End-to-end verified: ZEN-OC → silent → poller → OpenKJ queue
 
 ### Phase 2 — GRS Foundation
 - [ ] Build `grs.oriondevcore.com` hub page (venue discovery, platform overview)
@@ -239,6 +244,8 @@ AI runs across everything — three distinct engines:
 | 6 | Windows poller separate from Cloudflare | OpenKJ is desktop-only; SQLite local access |
 | 7 | Multi-tenant by subdomain (t1.grs, t2.grs) | Clean URL separation, venue-specific branding |
 | 8 | Workers AI for LLM features | Stays in Cloudflare ecosystem, no external API costs |
+| 9 | Spilled Beer search (LIKE + REPLACE chains) | FTS5 tokenizer can't match across punctuation; `REPLACE` chains on both query and DB side give true drunk-proof matching with progressive word dropping |
+| 10 | Poller runs via VBS + `python.exe` (not `pythonw.exe`) | `pythonw.exe` wouldn't persist in session-0 (scheduled task context); VBS runner + `python.exe` daemonizes reliably |
 
 ## Tools & Credentials
 

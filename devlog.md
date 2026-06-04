@@ -2,19 +2,43 @@
 
 ## 2026-06-04 — Phase 1b Complete
 
-### Fixes
+### Session 1 — OKJRS Flow Fixes
 - **OKJRS serial bug**: `getSerial(env)` was reading a static env var (`OKJRS_SERIAL=15`), so OKJRS never detected new requests — button never flashed. Changed to dynamic query: `SELECT MAX(id) FROM song_requests`. Deployed.
 - **OKJRS protocol fixes**: `error` field changed from boolean to string `"false"`/`"true"` to match StandaloneRequestServer format.
-- **Session-aware routing**: Changed from "has any prior requests" to "has accepted request within last 8 hours" — first request per night is pending (popup), subsequent are silent (auto-queue).
+- **Session-aware routing**: Changed from "has any prior requests" to `total_requests > 0` — first-ever request is pending (popup), subsequent are silent (auto-queue).
+- **RevertToPending**: Added API command + poller logic — when a silent request targets a singer NOT in rotation, poller flips it back to pending so KJ gets the popup.
+- **Poller state file**: Hardcoded to `C:\Users\Admin\.hermes\...` to work in non-interactive session-0.
+- **Poller runner**: Batch → VBS (`run-poller.vbs`) via `python.exe` (not `pythonw.exe`), properly daemonized. PID verified.
+- **Branding**: Favicon, apple-touch-icon, SS-LOGO.svg, manifest.json copied into all frontends. `.logo-glow` CSS added.
 
-### Deployments
-- **Poller v2** deployed to Windows (`C:\Users\Admin\openkj-poller.py`)
-- Scheduled task `SupaTraxx-Poller` created (runs at logon, pythonw no-console)
-- Poller running as background process (PID verified via WMI)
+### Session 2 — Spilled Beer Search + End-to-End
 
-### Data
-- Seeded 4,790 favourites from OpenKJ historySongs into D1 (1,389 singers, songs played 2+ times)
-- Created `favourites` table + unique index in supabook_users_db
+**Spilled Beer (drunk-proof search) — live on `/search`, `/suggestions`, and OKJRS protocol:**
+- Strips punctuation: `-"\\.,;:!@#$%^&*()_+=[]{}|<>/~` → space
+- Apostrophe removed entirely (so `O'BRIEN` → `OBRIEN`, search `obrien` finds it)
+- Uppercase matching on both sides via SQL REPLACE chains
+- Progressive word dropping: if 4-word search yields nothing, tries 3, then 2, then 1
+- SQL-side `cleanSQL()` uses nested `REPLACE` chains + `CHAR(39)` + double-space collapsing
+
+**Verified edge cases:**
+```
+obrien           → Gnash & Olivia O'brien              ✓
+dont             → Usher - I Don't Mind                ✓
+don''t           → same                                ✓
+james--bay       → James Bay                           ✓
+james!!!bay      → James Bay                           ✓
+boHEMian RHApsody → Bohemian Rhapsody                  ✓
+dont stop        → Don't Stop Me Now                   ✓
+james bay hold   → James Bay - Hold Back The River     ✓
+```
+
+**End-to-end test (ZEN-OC → James Bay - Hold Back The River):**
+1. POST /request → status `silent` (8 prior requests) ✓
+2. Poller picked up in 30s cycle → matched in dbSongs → queued at position 2 ✓
+3. OpenKJ queue verified: `qsongid=501`, artist "James Bay", title "Hold Back The River" ✓
+
+### Known Issue
+- Song count: OpenKJ has **671,865** songs on Windows, but only **224,956** imported to D1. ~447k missing — likely import script needs investigation.
 
 ## 2026-06-03 — Phase 1a Launch
 

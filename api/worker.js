@@ -16,6 +16,26 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
+// ── Spilled Beer (drunk-proof search) ──
+const DRUNK_CHARS = /[-"\\.,;:!@#$%^&*()_+=\[\]{}|<>\/~]/g;
+
+function spilledBeer(text) {
+  // Strip punctuation → space, apostrophe → empty (same as cleanSQL)
+  return text.replace(DRUNK_CHARS, ' ').replace(/'/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+function cleanSQL(expr) {
+  // Strip punctuation → space, apostrophe → empty, collapse consecutive spaces
+  const chars = ['-', '"', '.', ',', ';', ':', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '=', '[', ']', '{', '}', '|', '<', '>', '/', '~'];
+  let sql = `UPPER(${expr})`;
+  for (const c of chars) sql = `REPLACE(${sql}, '${c}', ' ')`;
+  sql = `REPLACE(${sql}, CHAR(39), '')`;                // apostrophe → empty (so O'BRIEN→OBRIEN)
+  sql = `REPLACE(${sql}, '  ', ' ')`;                   // collapse double spaces
+  sql = `REPLACE(${sql}, '  ', ' ')`;
+  sql = `REPLACE(${sql}, '  ', ' ')`;
+  return sql;
+}
+
 async function getSerial(env) {
   // Dynamic serial = max request ID so OKJRS detects new requests
   const row = await env.DB.prepare('SELECT COALESCE(MAX(id), 0) as max_id FROM song_requests').first().catch(() => ({ max_id: 0 }));
@@ -78,7 +98,7 @@ export default {
       return json({ status: 'live', service: 'SupaTraxx Karaoke API', version: VERSION, totalSongs: tot.c || 0, venue: VENUE, schedule: SCHEDULE, timestamp: new Date().toISOString() });
     }
 
-    // ── SEARCH ──
+    // ── SEARCH (Spilled Beer) ──
     if (path === '/search') {
       const q = (url.searchParams.get('q') || '').trim();
       const genre = (url.searchParams.get('genre') || '').trim();
@@ -86,9 +106,8 @@ export default {
       const decade = (url.searchParams.get('decade') || '').trim();
       const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200);
       try {
-        const params = [];
-        let sql;
         const metaJoin = 'LEFT JOIN songs_metadata m ON s.id = m.id';
+        const params = [];
         const metaWhere = [];
         if (genre) { metaWhere.push('m.genre = ?'); params.push(genre); }
         if (year && /^\d{4}$/.test(year)) { metaWhere.push('m.year = ?'); params.push(parseInt(year, 10)); }
@@ -97,19 +116,33 @@ export default {
           metaWhere.push('m.year >= ? AND m.year < ?');
           params.push(d, d + 10);
         }
-        const mw = metaWhere.length ? `AND ${metaWhere.join(' AND ')}` : '';
+        const mw = metaWhere.length ? ` AND ${metaWhere.join(' AND ')}` : '';
+        const fromClause = `okjrs_songdb s ${metaJoin}`;
 
-        if (q) {
-          sql = `SELECT s.id, s.artist, s.title FROM okjrs_songdb_fts JOIN okjrs_songdb s ON okjrs_songdb_fts.rowid = s.id ${metaJoin} WHERE okjrs_songdb_fts MATCH ? ${mw} ORDER BY rank LIMIT ?`;
-          params.unshift(q);
-        } else if (metaWhere.length) {
-          sql = `SELECT s.id, s.artist, s.title FROM okjrs_songdb s ${metaJoin} WHERE ${metaWhere.join(' AND ')} ORDER BY s.id LIMIT ?`;
-        } else {
-          sql = `SELECT s.id, s.artist, s.title FROM okjrs_songdb s ORDER BY s.id LIMIT ?`;
+        if (!q) {
+          if (metaWhere.length) {
+            const { results } = await env.DB.prepare(`SELECT s.id, s.artist, s.title FROM ${fromClause} WHERE ${metaWhere.join(' AND ')} ORDER BY s.id LIMIT ?`).bind(...params, limit).all();
+            return json({ query: '', genre, year, decade, count: results.length, results });
+          }
+          const { results } = await env.DB.prepare('SELECT id, artist, title FROM okjrs_songdb ORDER BY id LIMIT ?').bind(limit).all();
+          return json({ query: '', genre, year, decade, count: results.length, results });
         }
-        params.push(limit);
-        const { results } = await env.DB.prepare(sql).bind(...params).all();
-        return json({ query: q || '', genre, year, decade, count: results.length, results });
+
+        const cleaned = spilledBeer(q);
+        let words = cleaned ? cleaned.split(/\s+/) : [];
+        if (words.length === 0) return json({ query: q, genre, year, decade, count: 0, results: [] });
+
+        let results = [];
+        while (words.length > 0 && results.length === 0) {
+          const searchTerm = words.join(' ');
+          const cleanCol = cleanSQL("s.artist || ' ' || s.title");
+          const sql = `SELECT s.id, s.artist, s.title FROM ${fromClause} WHERE ${cleanCol} LIKE ?${mw} ORDER BY s.id LIMIT ?`;
+          const { results: r } = await env.DB.prepare(sql).bind(...params, `%${searchTerm}%`, limit).all();
+          results = r;
+          if (results.length === 0) words.pop();
+        }
+
+        return json({ query: q, cleaned, genre, year, decade, count: results.length, results });
       } catch (e) {
         return json({ error: 'Search failed', details: e.message }, 500);
       }
@@ -169,8 +202,15 @@ export default {
         const trending = await env.DB.prepare('SELECT artist, title, COUNT(*) as req_count FROM song_requests WHERE created_at > datetime(\'now\', \'-3 days\') GROUP BY artist, title ORDER BY req_count DESC LIMIT 5').all().catch(() => ({ results: [] }));
         let suggestions = [];
         if (q) {
-          const { results } = await env.DB.prepare('SELECT rowid as id, artist, title FROM okjrs_songdb_fts WHERE okjrs_songdb_fts MATCH ? ORDER BY rank LIMIT 10').bind(q).all();
-          suggestions = results;
+          const cleaned = spilledBeer(q);
+          let words = cleaned ? cleaned.split(/\s+/) : [];
+          while (words.length > 0 && suggestions.length === 0) {
+            const searchTerm = words.join(' ');
+            const cleanCol = cleanSQL("artist || ' ' || title");
+            const { results } = await env.DB.prepare(`SELECT id, artist, title FROM okjrs_songdb WHERE ${cleanCol} LIKE ? ORDER BY id LIMIT 10`).bind(`%${searchTerm}%`).all();
+            suggestions = results;
+            if (suggestions.length === 0) words.pop();
+          }
         } else {
           suggestions = trending.results || [];
         }
@@ -462,6 +502,14 @@ export default {
             data.serial = await getSerial(env) + 1;
             break;
           }
+          case 'revertToPending': {
+            const rvpId = body.request_id;
+            if (!rvpId) { data.error = 'true'; data.errorString = 'request_id required'; break; }
+            await env.DB.prepare("UPDATE song_requests SET status = 'pending' WHERE id = ? AND status = 'silent'").bind(rvpId).run();
+            data.success = true;
+            data.serial = await getSerial(env) + 1;
+            break;
+          }
           case 'getRequests': {
             const { results } = await env.DB.prepare('SELECT id as request_id, artist, title, singer, cast(strftime(\'%s\', created_at) as int) as request_time FROM song_requests WHERE status = \'pending\' ORDER BY id LIMIT 50').all();
             data.requests = results;
@@ -471,8 +519,19 @@ export default {
           case 'search': {
             const ss = body.searchString || '';
             if (!ss) { data.error = 'true'; data.errorString = 'searchString required'; break; }
-            const { results } = await env.DB.prepare('SELECT okjrs_songdb_fts.rowid as song_id, s.artist, s.title FROM okjrs_songdb_fts JOIN okjrs_songdb s ON okjrs_songdb_fts.rowid = s.id WHERE okjrs_songdb_fts MATCH ? ORDER BY rank LIMIT 100').bind(ss).all().catch(() => ({ results: [] }));
-            data.songs = results;
+            const cleaned = spilledBeer(ss);
+            let words = cleaned ? cleaned.split(/\s+/) : [];
+            if (words.length === 0) { data.requests = []; data.serial = await getSerial(env); break; }
+            let results = [];
+            while (words.length > 0 && results.length === 0) {
+              const searchTerm = words.join(' ');
+              const cleanCol = cleanSQL("s.artist || ' ' || s.title");
+              const { results: r } = await env.DB.prepare(`SELECT s.id as song_id, s.artist, s.title FROM okjrs_songdb s WHERE ${cleanCol} LIKE ? ORDER BY s.id LIMIT 100`).bind(`%${searchTerm}%`).all().catch(() => ({ results: [] }));
+              results = r;
+              if (results.length === 0) words.pop();
+            }
+            data.requests = results.map(r => ({ song_id: r.song_id, artist: r.artist, title: r.title }));
+            data.serial = await getSerial(env);
             break;
           }
           case 'submitRequest': {

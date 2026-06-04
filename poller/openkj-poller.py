@@ -22,7 +22,7 @@ from datetime import datetime
 API_BASE = "https://supatraxx-api.oriondevcore.com"
 OPENKJ_DB = r"C:\Users\Admin\AppData\Local\OpenKJ\OpenKJ\openkj.sqlite"
 POLL_INTERVAL = 30
-STATE_FILE = os.path.join(os.path.expanduser("~"), ".hermes", "openkj_poller_state.json")
+STATE_FILE = r"C:\Users\Admin\.hermes\openkj_poller_state.json"
 
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -69,6 +69,13 @@ def reject_request(request_id):
         api_post({"command": "rejectRequest", "request_id": request_id, "venue_id": 1})
     except Exception as e:
         print(f"  [WARN] rejectRequest failed: {e}")
+
+
+def revert_to_pending(request_id):
+    try:
+        api_post({"command": "revertToPending", "request_id": request_id, "venue_id": 1})
+    except Exception as e:
+        print(f"  [WARN] revertToPending failed: {e}")
 
 
 def normalize(s):
@@ -133,7 +140,9 @@ def auto_queue_song(request_data):
         singer = cursor.fetchone()
 
         if not singer:
-            print(f"  [OKJRS] New singer '{singer_name}' — leaving pending for KJ")
+            print(f"  [OKJRS] Singer '{singer_name}' not in rotation — reverting to pending")
+            if request_id:
+                revert_to_pending(request_id)
             return True
 
         singer_id, _ = singer
