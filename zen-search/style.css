@@ -57,15 +57,6 @@ main {
   margin-right: 8px;
 }
 
-.wordmark {
-  font-size: 14px;
-  font-weight: 300;
-  letter-spacing: 6px;
-  text-transform: uppercase;
-  color: var(--text);
-  opacity: 0.5;
-}
-
 .singer-badge {
   padding: 6px 16px;
   border-radius: 20px;
