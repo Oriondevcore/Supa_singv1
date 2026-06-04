@@ -16,7 +16,6 @@ database_id = "337f0340-cf1f-42f9-90c8-504bf68d1190"
 
 [vars]
 YOCO_SECRET = "sk_test_b5ed2388oL9E9Kx8f094f029bd71"
-OKJRS_SERIAL = "15"
 
 [triggers]
 crons = ["*/5 * * * *"]

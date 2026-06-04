@@ -194,12 +194,13 @@ AI runs across everything — three distinct engines:
 - [x] zen_db D1 created and wired
 - [x] supabook_db tables (users, favourites) created
 
-### Phase 1b — Profiles & Favourites (Current)
-- [ ] Build userdb.oriondevcore.com (profile page with mood icon picker, stats, milestones)
-- [ ] Build fav.oriondevcore.com (favourites showcase, quick re-request)
-- [ ] Import connors_singers.xml as seed favourites into D1
-- [ ] Deploy updated openkj-poller.py to Windows
-- [ ] Wire poller to `getSilentRequests` / `acceptRequest` API commands
+### Phase 1b — Profiles & Favourites (Complete ✅)
+- [x] Build userdb.oriondevcore.com (profile page with mood icon picker, stats, milestones)
+- [x] Build fav.oriondevcore.com (favourites showcase, quick re-request)
+- [x] Seed favourites from OpenKJ historySingers into D1 (4,790 favourites, 1,389 singers)
+- [x] Deploy updated openkj-poller.py to Windows (scheduled task, runs at logon)
+- [x] Wire poller to `getSilentRequests` / `acceptRequest` API commands
+- [x] Fix OKJRS serial: dynamic serial from D1 max ID (was static env var, broke popup notification)
 
 ### Phase 2 — GRS Foundation
 - [ ] Build `grs.oriondevcore.com` hub page (venue discovery, platform overview)

@@ -3,51 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Zen Search — Find Your Voice</title>
+  <title>Zen Search — Find Your Song</title>
   <meta name="theme-color" content="#050505">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Zen Search">
-  <meta name="description" content="A mindful way to find your next karaoke song.">
+  <meta name="description" content="Find your next karaoke song fast.">
   <link rel="icon" type="image/svg+xml" href="https://asset.oriondevcore.com/00-OV-logo/SVG/kar.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700&family=Noto+Serif+Display:ital,wght@0,400;1,300&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <canvas id="particles"></canvas>
-
   <header class="top-bar">
-    <img src="https://asset.oriondevcore.com/00-OV-logo/SVG/kar.svg" alt="" class="logo-glow" width="32" height="32">
+    <img src="https://asset.oriondevcore.com/00-OV-logo/SVG/kar.svg" alt="" class="logo-glow" width="36" height="36">
     <span class="wordmark">ZEN SEARCH</span>
     <button class="singer-badge" id="singerBadge" aria-label="Singer profile"></button>
-    <button class="ai-orb" id="aiOrb" aria-label="AI Guide">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10" opacity="0.3"/>
-        <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
-      </svg>
-    </button>
   </header>
 
   <main>
     <section class="hero">
-      <div class="hero-enso">
-        <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.15">
-          <circle cx="50" cy="50" r="48"/>
-        </svg>
-      </div>
-      <h1 class="tagline">Find your song.<br>Find your voice.</h1>
-      <p class="koan" id="koan"></p>
+      <h1 class="tagline">What are you singing?</h1>
     </section>
 
     <section class="search-section">
       <div class="search-wrap">
-        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input type="text" id="searchInput" placeholder="Search any song or artist..." autocomplete="off">
+        <input type="text" id="searchInput" placeholder="Search song or artist..." autocomplete="off">
       </div>
     </section>
 
@@ -57,53 +43,26 @@
     </section>
 
     <section class="genres-section" id="genresSection">
-      <p class="section-label">or refine by genre</p>
+      <p class="section-label">or pick a genre</p>
       <div class="chip-scroll" id="genreChips"></div>
     </section>
 
     <div id="results"></div>
 
     <footer class="page-footer">
-      <p class="footer-text">Tap a song, hit SUPA-SING!, and own the stage.</p>
+      <p class="footer-text">Pick a song and sing.</p>
       <div class="footer-links">
-        <a href="https://lite.oriondevcore.com" class="footer-link">Full Library</a>
-        <span class="footer-dot"></span>
-        <a href="https://fav.oriondevcore.com" class="footer-link">My Supa-Faves</a>
-        <span class="footer-dot"></span>
-        <a href="https://userdb.oriondevcore.com" class="footer-link">Supa-Profile</a>
-        <span class="footer-dot"></span>
-        <a href="#" class="footer-link" id="premiumLink">Unlock AI Guide</a>
+        <a href="https://fav.oriondevcore.com" class="footer-link">My Favourites</a>
+        <a href="https://userdb.oriondevcore.com" class="footer-link">My Profile</a>
       </div>
     </footer>
   </main>
 
-  <aside class="ai-panel" id="aiPanel">
-    <div class="ai-panel-header">
-      <span class="ai-panel-title">AI Guide</span>
-      <button class="ai-panel-close" id="aiPanelClose" aria-label="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
-    <div class="ai-panel-body">
-      <div class="premium-lock">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-        </svg>
-        <h3>Premium Feature</h3>
-        <p>Unlock your personal AI song guide. Tell it how you feel and discover songs you'll love.</p>
-        <button class="premium-btn">Unlock Now</button>
-      </div>
-    </div>
-  </aside>
-
   <div class="modal-overlay" id="regModal">
     <div class="modal">
       <div class="modal-header">
-        <h2>Step into the Spotlight</h2>
-        <p class="modal-sub">One name. One number. That's all it takes to sing.</p>
+        <h2>Let's Go!</h2>
+        <p class="modal-sub">Tell us your name to get singing.</p>
       </div>
       <form id="regForm">
         <div class="field">
@@ -114,17 +73,12 @@
           <label for="regWhatsApp">WhatsApp Number</label>
           <input type="tel" id="regWhatsApp" placeholder="e.g. +27 72 123 4567" required autocomplete="tel">
         </div>
-        <button type="submit" id="regSubmit" class="modal-btn">Step into the Spotlight</button>
+        <button type="submit" id="regSubmit" class="modal-btn">Let's Go!</button>
         <button type="button" id="regCancel" class="modal-btn modal-btn-secondary">Maybe Later</button>
       </form>
     </div>
   </div>
 
   <script src="app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-  </script>
 </body>
 </html>

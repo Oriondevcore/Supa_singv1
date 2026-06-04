@@ -16,9 +16,10 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-function getSerial(env) {
-  const s = parseInt(env.OKJRS_SERIAL, 10);
-  return isNaN(s) ? 15 : s;
+async function getSerial(env) {
+  // Dynamic serial = max request ID so OKJRS detects new requests
+  const row = await env.DB.prepare('SELECT COALESCE(MAX(id), 0) as max_id FROM song_requests').first().catch(() => ({ max_id: 0 }));
+  return row.max_id;
 }
 
 async function getSinger(env, name) {
@@ -208,8 +209,11 @@ export default {
         if (!song) return json({ error: 'Song not found' }, 404);
 
         const singer = await getSinger(env, singerName);
-        const hasPriorReqs = singer && (singer.total_requests || 0) > 0;
-        const status = hasPriorReqs ? 'silent' : 'pending';
+        const recentAccepted = await env.DB.prepare(
+          "SELECT COUNT(*) as c FROM song_requests WHERE singer = ? AND status = 'accepted' AND created_at > datetime('now', '-8 hours')"
+        ).bind(singerName).first().catch(() => ({ c: 0 }));
+        const inSession = recentAccepted.c > 0;
+        const status = inSession ? 'silent' : 'pending';
 
         await env.DB.prepare('INSERT INTO song_requests (singer, song_id, artist, title, key_change, venue, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
           .bind(singerName, songId, song.artist, song.title, keyChange, VENUE, status).run();
@@ -366,14 +370,14 @@ export default {
     // ── OKJRS PROTOCOL ──
     if (path === '/api' && method === 'POST') {
       const { command } = body;
-      let data = { command, error: false };
+      let data = { command, error: 'false' };
       try {
         switch (command) {
           case 'connectionTest':
             data.connection = 'ok';
             break;
           case 'getSerial':
-            data.serial = getSerial(env);
+            data.serial = await getSerial(env);
             break;
           case 'getVenues':
             data.venues = [{ venue_id: 1, name: 'Connor\'s', url_name: 'connors', accepting: true }];
@@ -396,33 +400,33 @@ export default {
 
           // ── Poller: fetch silent requests for auto-queue ──
           case 'getSilentRequests': {
-            const { results } = await env.DB.prepare('SELECT id as request_id, artist, title, singer, cast(strftime(\'%s\', created_at) as int) as request_time, song_id, key_change FROM song_requests WHERE status = \'silent\' ORDER BY id LIMIT 50').all();
-            data.requests = results.map(r => ({ ...r, key_change: r.key_change || 0 }));
-            data.serial = getSerial(env);
+            const { results } = await env.DB.prepare('SELECT id as request_id, artist, title, singer, cast(strftime(\'%s\', created_at) as int) as request_time FROM song_requests WHERE status = \'silent\' ORDER BY id LIMIT 50').all();
+            data.requests = results;
+            data.serial = await getSerial(env);
             break;
           }
 
           // ── Poller: accept a silent request after auto-queue ──
           case 'acceptRequest': {
             const rid = body.request_id;
-            if (!rid) { data.error = true; data.errorString = 'request_id required'; break; }
-            await env.DB.prepare("UPDATE song_requests SET status = 'accepted' WHERE id = ? AND status = 'silent'").bind(rid).run();
+            if (!rid) { data.error = 'true'; data.errorString = 'request_id required'; break; }
+            await env.DB.prepare("UPDATE song_requests SET status = 'accepted' WHERE id = ?").bind(rid).run();
             const req = await env.DB.prepare('SELECT singer FROM song_requests WHERE id = ?').bind(rid).first();
             if (req?.singer) {
               await addPoints(env, req.singer, 5, 0);
             }
             data.success = true;
-            data.serial = getSerial(env) + 1;
+            data.serial = await getSerial(env) + 1;
             break;
           }
 
           // ── Poller: reject a silent request ──
           case 'rejectRequest': {
             const rj = body.request_id;
-            if (!rj) { data.error = true; data.errorString = 'request_id required'; break; }
-            await env.DB.prepare("UPDATE song_requests SET status = 'rejected' WHERE id = ? AND status = 'silent'").bind(rj).run();
+            if (!rj) { data.error = 'true'; data.errorString = 'request_id required'; break; }
+            await env.DB.prepare("UPDATE song_requests SET status = 'rejected' WHERE id = ?").bind(rj).run();
             data.success = true;
-            data.serial = getSerial(env) + 1;
+            data.serial = await getSerial(env) + 1;
             break;
           }
 
@@ -436,62 +440,62 @@ export default {
               tx.bind(a, t, `${a} - ${t}`, `${a} - ${t}`.toLowerCase()).run();
               lastArtist = a; lastTitle = t; processed++;
             }
-            data.error = errs.length > 0;
+            data.error = errs.length > 0 ? 'true' : 'false';
             data.errorString = errs.length > 0 ? 'Some errors' : null;
             data.errors = errs;
             data['entries processed'] = processed;
             data.last_artist = lastArtist;
             data.last_title = lastTitle;
-            data.serial = getSerial(env);
+            data.serial = await getSerial(env);
             break;
           }
           case 'clearDatabase':
             await env.DB.prepare('DELETE FROM okjrs_songdb').run();
             await env.DB.prepare('DELETE FROM song_requests').run();
-            data.serial = getSerial(env) + 1;
+            data.serial = await getSerial(env) + 1;
             break;
           case 'clearRequests':
             await env.DB.prepare('DELETE FROM song_requests').run();
-            data.serial = getSerial(env) + 1;
+            data.serial = await getSerial(env) + 1;
             break;
           case 'deleteRequest': {
             const rid2 = body.request_id;
-            if (!rid2) { data.error = true; data.errorString = 'request_id required'; break; }
+            if (!rid2) { data.error = 'true'; data.errorString = 'request_id required'; break; }
             await env.DB.prepare('UPDATE song_requests SET status = \'deleted\' WHERE id = ?').bind(rid2).run();
-            data.serial = getSerial(env) + 1;
+            data.serial = await getSerial(env) + 1;
             break;
           }
           case 'getRequests': {
-            const { results } = await env.DB.prepare('SELECT id as request_id, artist, title, singer, cast(strftime(\'%s\', created_at) as int) as request_time, song_id, key_change FROM song_requests WHERE status = \'pending\' ORDER BY id LIMIT 50').all();
-            data.requests = results.map(r => ({ ...r, key_change: r.key_change || 0 }));
-            data.serial = getSerial(env);
+            const { results } = await env.DB.prepare('SELECT id as request_id, artist, title, singer, cast(strftime(\'%s\', created_at) as int) as request_time FROM song_requests WHERE status = \'pending\' ORDER BY id LIMIT 50').all();
+            data.requests = results;
+            data.serial = await getSerial(env);
             break;
           }
           case 'search': {
             const ss = body.searchString || '';
-            if (!ss) { data.error = true; data.errorString = 'searchString required'; break; }
+            if (!ss) { data.error = 'true'; data.errorString = 'searchString required'; break; }
             const { results } = await env.DB.prepare('SELECT okjrs_songdb_fts.rowid as song_id, s.artist, s.title FROM okjrs_songdb_fts JOIN okjrs_songdb s ON okjrs_songdb_fts.rowid = s.id WHERE okjrs_songdb_fts MATCH ? ORDER BY rank LIMIT 100').bind(ss).all().catch(() => ({ results: [] }));
             data.songs = results;
             break;
           }
           case 'submitRequest': {
             const { singerName, songId } = body;
-            if (!singerName || !songId) { data.error = true; data.errorString = 'singerName and songId required'; break; }
+            if (!singerName || !songId) { data.error = 'true'; data.errorString = 'singerName and songId required'; break; }
             const song = await env.DB.prepare('SELECT artist, title FROM okjrs_songdb WHERE id = ?').bind(songId).first();
-            if (!song) { data.error = true; data.errorString = 'Song not found'; break; }
+            if (!song) { data.error = 'true'; data.errorString = 'Song not found'; break; }
             await env.DB.prepare('INSERT INTO song_requests (singer, song_id, artist, title, key_change, status) VALUES (?, ?, ?, ?, ?, \'pending\')').bind(singerName, songId, song.artist, song.title, body.key_change || 0).run();
             await getSinger(env, singerName);
             data.success = true;
-            data.serial = getSerial(env) + 1;
+            data.serial = await getSerial(env) + 1;
             data.request_id = 1;
             break;
           }
           default:
-            data.error = true;
+            data.error = 'true';
             data.errorString = 'Unknown command';
             break;
         }
-      } catch (e) { data.error = true; data.errorString = e.message; }
+      } catch (e) { data.error = 'true'; data.errorString = e.message; }
       return json(data);
     }
 
