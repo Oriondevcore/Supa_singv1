@@ -209,11 +209,8 @@ export default {
         if (!song) return json({ error: 'Song not found' }, 404);
 
         const singer = await getSinger(env, singerName);
-        const recentAccepted = await env.DB.prepare(
-          "SELECT COUNT(*) as c FROM song_requests WHERE singer = ? AND status = 'accepted' AND created_at > datetime('now', '-8 hours')"
-        ).bind(singerName).first().catch(() => ({ c: 0 }));
-        const inSession = recentAccepted.c > 0;
-        const status = inSession ? 'silent' : 'pending';
+        const hasSungBefore = (singer.total_requests || 0) > 0;
+        const status = hasSungBefore ? 'silent' : 'pending';
 
         await env.DB.prepare('INSERT INTO song_requests (singer, song_id, artist, title, key_change, venue, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
           .bind(singerName, songId, song.artist, song.title, keyChange, VENUE, status).run();
