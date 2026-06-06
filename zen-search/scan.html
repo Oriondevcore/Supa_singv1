@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SupaSing · Scan & Sing</title>
+<meta name="theme-color" content="#050505">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="/SS-LOGO.svg" type="image/svg+xml">
+<style>
+  :root { --bg: #050505; --surface: #0d0d0d; --surface2: #1a1a1a; --border: #2a2a2a; --text: #e8e8e8; --text2: #777; --gold: #f0c040; --green: #22c55e; --green2: #16a34a; --accent: #a78bfa; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, sans-serif; min-height: 100dvh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  header img { width: 32px; height: 32px; }
+  header h1 { font-size: 16px; font-weight: 600; flex: 1; color: var(--gold); }
+  #singerBadge { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; }
+  #singerBadge.has-singer { border-color: var(--green); color: var(--green); }
+  #searchWrap { padding: 12px 16px; position: sticky; top: 0; background: var(--bg); z-index: 10; }
+  #searchInput { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 18px; color: var(--text); outline: none; transition: border .15s; }
+  #searchInput:focus { border-color: var(--gold); }
+  #searchInput::placeholder { color: var(--text2); }
+  #status { padding: 6px 16px; font-size: 13px; color: var(--text2); min-height: 28px; }
+  #content { flex: 1; padding: 0 16px 120px; overflow-y: auto; }
+  .card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; transition: border .15s; }
+  .card:active { border-color: var(--gold); }
+  .card img { width: 48px; height: 48px; border-radius: 4px; background: var(--surface2); object-fit: cover; flex-shrink: 0; }
+  .card .info { flex: 1; min-width: 0; }
+  .card .title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .artist { font-size: 13px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .sing-btn { background: var(--green2); color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
+  .card .sing-btn:disabled { opacity: .4; }
+  .card .sing-btn.done { background: var(--border); color: var(--text2); }
+  #bottom { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+  #bottom .singer-info { flex: 1; font-size: 13px; color: var(--text2); }
+  #bottom .singer-info strong { color: var(--text); }
+  #regModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 100; align-items: flex-end; justify-content: center; }
+  #regModal.open { display: flex; }
+  #regModal .sheet { background: var(--surface); border-radius: 16px 16px 0 0; padding: 24px 20px; width: 100%; max-width: 420px; animation: slideUp .2s ease; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  #regModal h2 { font-size: 18px; margin-bottom: 4px; }
+  #regModal p { font-size: 13px; color: var(--text2); margin-bottom: 16px; }
+  #regModal label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; font-weight: 600; }
+  #regModal input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 16px; color: var(--text); margin-bottom: 12px; outline: none; }
+  #regModal input:focus { border-color: var(--gold); }
+  #regModal .actions { display: flex; gap: 8px; margin-top: 4px; }
+  #regModal .actions button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; }
+  #regModal .actions .cancel { background: var(--surface2); color: var(--text2); }
+  #regModal .actions .confirm { background: var(--green2); color: #fff; }
+  #regModal .actions .confirm:disabled { opacity: .4; }
+  #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--green2); color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; z-index: 200; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; }
+  .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin .6s linear infinite; margin: 40px auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 14px; }
+  .empty .big { font-size: 40px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="/SS-LOGO.svg" alt="">
+  <h1>SupaSing</h1>
+  <div id="singerBadge">Sign In</div>
+</header>
+
+<div id="searchWrap">
+  <input id="searchInput" type="search" placeholder="Search for a song..." autofocus autocomplete="off">
+</div>
+<div id="status">Tap a song, then tap Sing! to join the queue.</div>
+<div id="content"></div>
+
+<div id="bottom">
+  <div class="singer-info" id="singerInfo">Scan to sing your next karaoke jam</div>
+</div>
+
+<div id="regModal">
+  <div class="sheet">
+    <h2>One more thing</h2>
+    <p>We just need your name so the KJ knows who's singing.</p>
+    <label>Your Name</label>
+    <input id="regName" type="text" placeholder="e.g. John" autocomplete="name">
+    <label>WhatsApp (optional — for your history)</label>
+    <input id="regWhatsApp" type="tel" placeholder="e.g. 0712345678" autocomplete="tel">
+    <div class="actions">
+      <button class="cancel" id="regCancel">Cancel</button>
+      <button class="confirm" id="regConfirm" disabled>Let's Sing!</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = 'https://supatraxx-api.orion269.workers.dev';
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+const searchInput = $('#searchInput');
+const content = $('#content');
+const status = $('#status');
+const singerBadge = $('#singerBadge');
+const singerInfo = $('#singerInfo');
+const regModal = $('#regModal');
+const regName = $('#regName');
+const regWhatsApp = $('#regWhatsApp');
+const regConfirm = $('#regConfirm');
+const regCancel = $('#regCancel');
+const toast = $('#toast');
+
+const SINGER_KEY = 'supasing_singer';
+let singer = null;
+let debounceTimer = null;
+let artworkCache = new Map();
+
+function loadSinger() {
+  try { const d = JSON.parse(localStorage.getItem(SINGER_KEY)); if (d?.name) singer = d; } catch {}
+  updateUI();
+}
+
+function saveSinger(d) {
+  singer = d;
+  localStorage.setItem(SINGER_KEY, JSON.stringify(d));
+  updateUI();
+}
+
+function updateUI() {
+  if (singer?.stageName) {
+    singerBadge.textContent = singer.stageName;
+    singerBadge.classList.add('has-singer');
+    singerInfo.innerHTML = `Singing as <strong>${singer.stageName}</strong> · <a href="#" id="signOutLink" style="color:var(--text2)">not you?</a>`;
+    const link = singerInfo.querySelector('#signOutLink');
+    if (link) link.onclick = e => { e.preventDefault(); signOut(); };
+  } else if (singer?.name) {
+    singerBadge.textContent = singer.name.split(' ')[0];
+    singerBadge.classList.add('has-singer');
+    singerInfo.innerHTML = `Singing as <strong>${singer.name}</strong> · <a href="#" id="signOutLink" style="color:var(--text2)">not you?</a>`;
+    const link = singerInfo.querySelector('#signOutLink');
+    if (link) link.onclick = e => { e.preventDefault(); signOut(); };
+  } else {
+    singerBadge.textContent = 'Sign In';
+    singerBadge.classList.remove('has-singer');
+    singerInfo.textContent = 'Scan to sing your next karaoke jam';
+  }
+}
+
+function signOut() {
+  localStorage.removeItem(SINGER_KEY);
+  singer = null;
+  updateUI();
+  showToast('Signed out');
+}
+
+function showToast(msg, duration = 3000) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._hide);
+  toast._hide = setTimeout(() => toast.classList.remove('show'), duration);
+}
+
+let pendingSong = null;
+
+function promptSignIn(songEl) {
+  pendingSong = songEl;
+  regName.value = '';
+  regWhatsApp.value = '';
+  regConfirm.disabled = true;
+  regModal.classList.add('open');
+  setTimeout(() => regName.focus(), 300);
+}
+
+regName.addEventListener('input', () => {
+  regConfirm.disabled = !regName.value.trim();
+});
+
+regConfirm.addEventListener('click', async () => {
+  const name = regName.value.trim();
+  if (!name) return;
+  regConfirm.disabled = true;
+  regConfirm.textContent = 'Registering...';
+  try {
+    const res = await fetch(`${API}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, whatsapp: regWhatsApp.value.trim() || undefined })
+    });
+    const data = await res.json();
+    saveSinger({ name: data.name || name, stageName: data.stage_name, id: data.id });
+    regModal.classList.remove('open');
+    if (pendingSong) {
+      actuallySing(pendingSong);
+      pendingSong = null;
+    }
+  } catch {
+    showToast('Could not register. Try again.');
+  }
+  regConfirm.textContent = "Let's Sing!";
+});
+
+regCancel.addEventListener('click', () => {
+  regModal.classList.remove('open');
+  pendingSong = null;
+});
+
+function actuallySing(card) {
+  const artist = card.dataset.artist;
+  const title = card.dataset.title;
+  const songId = card.dataset.songid;
+  const btn = card.querySelector('.sing-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  fetch(`${API}/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      artist, title, song_id: Number(songId),
+      singer: singer?.name || 'Anonymous',
+      whatsapp: singer?.whatsapp || ''
+    })
+  }).then(r => r.json()).then(data => {
+    if (data.status === 'pending' || data.status === 'silent') {
+      btn.textContent = '✓ Queued!';
+      btn.classList.add('done');
+      btn.disabled = true;
+      showToast('Your jam is in the queue! Listen for your name.');
+    } else {
+      btn.textContent = 'Sing!';
+      btn.disabled = false;
+      showToast(data.error || 'Something went wrong');
+    }
+  }).catch(() => {
+    btn.textContent = 'Sing!';
+    btn.disabled = false;
+    showToast('Could not reach the server');
+  });
+}
+
+function doSing(e) {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  if (e.target.tagName !== 'BUTTON') return;
+
+  if (!singer) {
+    promptSignIn(card);
+    return;
+  }
+  actuallySing(card);
+}
+
+content.addEventListener('click', doSing);
+
+async function doSearch() {
+  const q = searchInput.value.trim();
+  if (!q) { content.innerHTML = '<div class="empty"><div class="big">🎤</div>Search for a song to get started</div>'; return; }
+  content.innerHTML = '<div class="spinner"></div>';
+  status.textContent = `Searching "${q}"...`;
+  try {
+    const res = await fetch(`${API}/search?q=${encodeURIComponent(q)}&limit=30`);
+    const data = await res.json();
+    const results = data.results || [];
+    if (!results.length) {
+      content.innerHTML = '<div class="empty"><div class="big">🔍</div>No songs found. Try a different search.</div>';
+      status.textContent = 'No results — try another search';
+      return;
+    }
+    status.textContent = `${results.length} songs found`;
+    content.innerHTML = results.map(s => {
+      const artKey = `${s.artist}|${s.title}`;
+      const art = artworkCache.get(artKey) || '';
+      return `<div class="card" data-artist="${escapeAttr(s.artist)}" data-title="${escapeAttr(s.title)}" data-songid="${s.id}">
+        <img src="${art || '/SS-LOGO.svg'}" alt="" loading="lazy" onerror="this.src='/SS-LOGO.svg'">
+        <div class="info">
+          <div class="title">${escapeHtml(s.title)}</div>
+          <div class="artist">${escapeHtml(s.artist)}</div>
+        </div>
+        <button class="sing-btn">Sing!</button>
+      </div>`;
+    }).join('');
+    // lazy-load artwork
+    for (const s of results) {
+      const artKey = `${s.artist}|${s.title}`;
+      if (artworkCache.has(artKey)) continue;
+      fetch(`${API}/artwork?artist=${encodeURIComponent(s.artist)}&title=${encodeURIComponent(s.title)}`).then(r => r.json()).then(d => {
+        if (d.url) {
+          artworkCache.set(artKey, d.url);
+          const imgs = content.querySelectorAll('.card');
+          for (const img of imgs) {
+            if (img.dataset.artist === s.artist && img.dataset.title === s.title) {
+              img.querySelector('img').src = d.url;
+            }
+          }
+        }
+      }).catch(() => {});
+    }
+  } catch {
+    content.innerHTML = '<div class="empty"><div class="big">⚠️</div>Could not reach the song library. Check your connection.</div>';
+    status.textContent = 'Connection error';
+  }
+}
+
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escapeAttr(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(doSearch, 250);
+});
+
+singerBadge.addEventListener('click', () => {
+  if (singer) signOut();
+  else promptSignIn(null);
+});
+
+loadSinger();
+content.innerHTML = '<div class="empty"><div class="big">🎤</div>Search for a song to get started</div>';
+</script>
+</body>
+</html>
