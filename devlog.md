@@ -1,5 +1,39 @@
 # Dev Log — SupaSing
 
+## 2026-06-06 — Naledi Phase 2: GLM-4.7-Flash + Tool Calling + TTS + Pages Cleanup
+
+### Naledi Chat Upgrade
+- **Model swap**: `@cf/meta/llama-3.2-3b-instruct` → `@cf/zai-org/glm-4.7-flash` (supports tool calling, 131K context, better at following instructions)
+- **searchSongs tool**: Naledi can now search the 667K karaoke library automatically — when you ask for song recommendations, she calls the API, reads results, and suggests real songs
+- **Multi-turn tool loop**: GLM can make multiple search calls (e.g., "Queen songs" then "We Will Rock You" for details), combine results, and respond naturally
+- **Tool debug info**: response includes `toolCalls` array showing name, args, and result of each tool use
+
+### TTS (Text-to-Speech)
+- **`/naledi/tts` endpoint**: uses `@cf/myshell-ai/melotts`, returns base64 MP3 audio
+- **Pricing**: $0.0002/min — ~537 minutes/day fit in $5 Workers Paid plan
+- Tested: 354K audio chars for "Hello Graham, Naledi here. Ready for karaoke tonight?"
+
+### Test Playground
+- **`naledi-test.html`** at `oriondevcore.com/naledi-test.html`
+- Preset buttons: recommend songs, Queen rock, R&B, soulful ballad, services, intro
+- Tool call debug panel (sidebar): shows every tool Naledi used, args, and results
+- TTS toggle: hear Naledi speak responses
+- Works offline/online — graceful error handling
+
+### SupaTraxx 404 Fix
+- **Root cause**: `zen-search` Pages project had empty `root_dir` in build config → published repo root instead of `/zen-search/` → every deployment served 404
+- **Fix**: set `root_dir: zen-search` via API, retriggered deployment
+- `supatraxx.oriondevcore.com` now HTTP 200 with full SupaTraxx UI
+- `zen-search.oriondevcore.com` was serving stale cache (worked because old deployment had correct root_dir before redesign)
+
+### Pages Deployment Cleanup
+- **zen-search**: deleted 14 old deployments (manual uploads, stale main builds) — kept only current live build
+- **orion-ventures**: deleted 23 old deployments (including 5 failed builds) — kept 2 latest
+
+### Known Issues
+- Windows poller still offline (laptop disconnected from Connor's)
+- Song count mismatch persists (224,956 in D1 vs 671,865 on Windows)
+
 ## 2026-06-04 — SupaTraxx Redesign + Charts + Artwork
 
 ### SupaTraxx (zen-search) — Full UI Redesign
@@ -62,7 +96,6 @@ james bay hold   → James Bay - Hold Back The River     ✓
 ### Known Issues
 - **Windows poller offline**: laptop disconnected from Connor's — poller (`openkj-poller.py`) will not run until reconnected. Silent requests will not auto-queue.
 - **Song count mismatch**: OpenKJ has **671,865** songs on Windows, but only **224,956** imported to D1. ~447k missing — likely import script needs investigation.
-- **Landing page AI binding**: `AI` + `AI_CHAT` + `MODEL` bindings added in Dashboard but Naledi chat function may need environment variable `CLOUDFLARE_API_TOKEN` for the REST fallback path if binding doesn't connect.
 
 ## 2026-06-03 — Phase 1a Launch
 

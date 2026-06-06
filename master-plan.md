@@ -51,14 +51,25 @@ Each tenant gets: song search, request flow, singer profiles, favourites, DJ que
 3. **NPO Helper** — Charity karaoke events, fundraising drives, donor leaderboards
 4. **Business Engine** — Venue analytics: peak songs, singer retention, revenue tracking
 
+### Naledi — The AI Voice of Orion Ventures
+
+Naledi is the AI assistant front-and-centre on the landing page (`oriondevcore.com`). She's powered by Workers AI and handles:
+
+- **Song recommendations**: searches the 667K library via `searchSongs` tool (GLM-4.7-Flash)
+- **Booking inquiries**: directs users to WhatsApp for quotes and event booking
+- **TTS voice**: speaks responses aloud via MeloTTS ($0.0002/min)
+- **Fallback chain**: AI binding → REST API → WhatsApp fallback
+
+Access Naledi's test playground at `oriondevcore.com/naledi-test.html` (private, for testing).
+
 ### The AI Layer
 
 AI runs across everything — three distinct engines:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     AI ORCHESTRATOR                          │
-│                  Workers AI (Cloudflare)                      │
+│                     NALEDI (AI ORCHESTRATOR)                 │
+│             GLM-4.7-Flash + Tool Calling + TTS               │
 ├─────────────────┬─────────────────────┬──────────────────────┤
 │  RECOMMENDER    │  ANALYST            │  RESEARCHER          │
 ├─────────────────┼─────────────────────┼──────────────────────┤
@@ -67,8 +78,9 @@ AI runs across everything — three distinct engines:
 │ and what's      │ peak times, singer  │ preferences, trends  │
 │ trending now    │ retention patterns  │ NO PII ever linked   │
 ├─────────────────┴─────────────────────┴──────────────────────┤
-│                        AI GUIDE (Premium)                     │
-│        Personalised song suggestions via chat interface       │
+│                        NALEDI (AI Guide)                      │
+│  Personalised song suggestions + tool calling + TTS voice    │
+│  Replaces old "AI Guide (Premium)" concept — built and live  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,12 +140,13 @@ AI runs across everything — three distinct engines:
 
 | Domain | Purpose | Cloudflare |
 |--------|---------|------------|
-| supatraxx.oriondevcore.com | Song search, request, charts, history | Pages (zen-search, renamed) |
+| supatraxx.oriondevcore.com | Song search, request, charts, history | Pages (zen-search) |
 | userdb.oriondevcore.com | Singer profiles | Pages |
 | fav.oriondevcore.com | Favourites & history | Pages |
 | docs.oriondevcore.com | Docs, legal, FAQ | Pages (orion-docs) |
 | supatraxx-api.oriondevcore.com | Backend API | Worker |
-| oriondevcore.com | Landing page, Naledi AI chat | Pages (orion-ventures) |
+| oriondevcore.com | Landing page, Naledi AI chat, Naledi test playground | Pages (orion-ventures) |
+| naledi-test.oriondevcore.com | *(future)* Dedicated Naledi subdomain | Pages |
 
 ## Databases
 
@@ -213,21 +226,27 @@ AI runs across everything — three distinct engines:
 - [x] Anonymous charts: most-requested songs & artists (`/charts` endpoint, no user names)
 - [x] Singer history tab ("My Songs") in bottom nav, fetched from `/profile` endpoint
 - [x] Bottom nav: Search | My Songs | Faves | Profile
-- [x] `supatraxx.oriondevcore.com` custom domain assigned (pages refresh pending)
+- [x] `supatraxx.oriondevcore.com` custom domain assigned and serving (fixed root_dir → zen-search/)
 - [x] Landing page AI binding added (NALEDI AI + MODEL for Workers AI)
 - [ ] Windows poller offline (laptop disconnected from Connor's)
 
-### Phase 2 — GRS Foundation
-- [ ] Build `grs.oriondevcore.com` hub page (venue discovery, platform overview)
-- [ ] Build `t1.grs.oriondevcore.com` (Connor's branded tenant portal)
-- [ ] Multi-tenant architecture: venue_id in all operational tables
-- [ ] Venue admin dashboard (queue management, singer list, stats)
+### Phase 2 — Naledi & AI Features (In Progress 🔄)
+- [x] Upgrade Naledi to `@cf/zai-org/glm-4.7-flash` — supports tool calling, 131K context
+- [x] Add `searchSongs` tool — Naledi searches the 667K library for real song recommendations
+- [x] Multi-turn tool loop — GLM makes multiple search calls, combines results naturally
+- [x] Build `/naledi/tts` TTS endpoint via `@cf/myshell-ai/melotts` ($0.0002/min)
+- [x] Build Naledi test playground at `oriondevcore.com/naledi-test.html` (presets, tool debug panel, TTS toggle)
+- [ ] Add `getVenueInfo` tool — Naledi answers venue/event questions from live data
+- [ ] Add song request tool — Naledi can submit requests directly into the queue
+- [ ] Build Telegram bot for async Naledi chat when user is away from browser
+- [ ] Public launch: embed Naledi chat widget on landing page (already wired, polish needed)
 
-### Phase 3 — AI & Intelligence
-- [ ] AI Guide (Workers AI LLM + RAG on song catalogue)
-- [ ] Trending / recommendation engine (collaborative filtering)
+### Phase 3 — Intelligence & Scale
+- [ ] Trending / recommendation engine (collaborative filtering based on request patterns)
 - [ ] Anonymous behaviour analytics pipeline
 - [ ] AI-powered mood-to-song matching (beyond static genre mapping)
+- [ ] Multi-tenant architecture: venue_id in all operational tables
+- [ ] Venue admin dashboard (queue management, singer list, stats)
 
 ### Phase 4 — Monetisation
 - [ ] Supa-Fan subscriptions (premium profile, AI Guide, no ads)
@@ -259,6 +278,10 @@ AI runs across everything — three distinct engines:
 | 11 | Album art via iTunes API + D1 cache | Free, no API key needed; D1 UNIQUE(artist,title) avoids repeated lookups; `300x300bb` size from `100x100bb` replacement |
 | 12 | Anonymous charts (no user names) | Privacy-first; `song_requests` GROUP BY artist/title with counts only, no singer field exposed |
 | 13 | Landing page AI binding (Pages Functions + Workers AI) | Uses `env.AI` binding in Pages Functions; falls back to REST API with CLOUDFLARE_API_TOKEN; final fallback directs to WhatsApp |
+| 14 | Naledi uses GLM-4.7-Flash (not Llama 3.2 3B) | GLM-4.7-Flash supports native tool calling with multi-turn loops, 131K context window, and better instruction following at similar latency/cost |
+| 15 | Tool calling for song search | `searchSongs` tool calls the worker API `/search` endpoint — Naledi searches the actual library instead of making up songs or hallucinating |
+| 16 | TTS via MeloTTS on Workers AI | `@cf/myshell-ai/melotts` at $0.0002/min — 537 min/day fits in $5 plan; returns base64 MP3 directly, no external API needed |
+| 17 | Pages root_dir must be set explicitly | `zen-search` Pages project had empty `root_dir` → published repo root (not `/zen-search/`) → every deployment served 404. Fixed via API: `root_dir: zen-search` |
 
 ## Tools & Credentials
 
