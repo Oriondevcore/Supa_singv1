@@ -58,9 +58,20 @@ Naledi is the AI assistant front-and-centre on the landing page (`oriondevcore.c
 - **Song recommendations**: searches the 667K library via `searchSongs` tool (GLM-4.7-Flash)
 - **Booking inquiries**: directs users to WhatsApp for quotes and event booking
 - **TTS voice**: speaks responses aloud via MeloTTS ($0.0002/min)
+- **STT (Speech-to-Text)**: listens via microphone + Whisper ($0.00045/min)
+- **Proactive personality**: asks follow-up questions, suggests songs, keeps conversation flowing
+- **Dynamic greeting**: fresh greeting every time via `init` flow
 - **Fallback chain**: AI binding → REST API → WhatsApp fallback
 
 Access Naledi's test playground at `oriondevcore.com/naledi-test.html` (private, for testing).
+
+### Naledi API
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/naledi/chat` | POST | Chat with Naledi (GLM-4.7-Flash + searchSongs tool) |
+| `/naledi/tts` | POST | Text-to-speech (MeloTTS, returns base64 MP3) |
+| `/naledi/stt` | POST | Speech-to-text (Whisper, returns transcribed text) |
 
 ### The AI Layer
 
@@ -110,17 +121,21 @@ AI runs across everything — three distinct engines:
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  zen-search      │────▶│  API Worker      │────▶│  supatraxx_db   │
-│  (search + mood) │     │  (Cloudflare)    │     │  (D1: songs,    │
+│  supatraxx       │────▶│  API Worker      │────▶│  supatraxx_db   │
+│  (search, scan)  │     │  (Cloudflare)    │     │  (D1: songs,    │
 │                  │     │                  │     │   requests)     │
-│  userdb          │────▶│  v4.0            │────▶│                  │
-│  (profile page)  │     │                  │     │  supabook_db    │
-│                  │     │                  │────▶│  (D1: users,    │
-│  fav             │────▶│                  │     │   favourites)   │
-│  (faves/history) │     │                  │     │                  │
-│                  │     │                  │     │  zen_db          │
-│  docs            │     │                  │────▶│  (D1: memory)   │
-│  (docs site)     │     │                  │     │                  │
+│  oriondevcore    │     │  v4.1            │────▶│                  │
+│  /fav/ /profile/ │     │                  │     │  supabook_db    │
+│  /sing → /scan   │     │                  │────▶│  (D1: users,    │
+│                  │     │                  │     │   favourites)   │
+│  docs            │     │                  │     │                  │
+│  (docs site)     │     │                  │     │  zen_db          │
+│                  │     │                  │────▶│  (D1: memory)   │
+│  Naledi AI:      │     │                  │     │                  │
+│  /naledi/chat    │     │                  │     │  Workers AI:     │
+│  /naledi/tts     │     │                  │     │  GLM-4.7-Flash   │
+│  /naledi/stt     │     │                  │     │  MeloTTS         │
+│                  │     │                  │     │  Whisper-large   │
 └─────────────────┘     └────────┬─────────┘     └─────────────────┘
                                  │
                                  ▼
@@ -131,22 +146,21 @@ AI runs across everything — three distinct engines:
                         │  ┌─────────────┐  │
                         │  │ OpenKJ      │  │
                         │  │ SQLite      │  │
-                        │  │ queueSongs  │  │
                         │  └─────────────┘  │
                         └──────────────────┘
 ```
 
 ## Domains (Current)
 
-| Domain | Purpose | Cloudflare |
-|--------|---------|------------|
+| Domain / Path | Purpose | Cloudflare |
+|----------|---------|------------|
 | supatraxx.oriondevcore.com | Song search, request, charts, history | Pages (zen-search) |
-| userdb.oriondevcore.com | Singer profiles | Pages |
-| fav.oriondevcore.com | Favourites & history | Pages |
 | docs.oriondevcore.com | Docs, legal, FAQ | Pages (orion-docs) |
 | supatraxx-api.oriondevcore.com | Backend API | Worker |
-| oriondevcore.com | Landing page, Naledi AI chat, Naledi test playground | Pages (orion-ventures) |
-| naledi-test.oriondevcore.com | *(future)* Dedicated Naledi subdomain | Pages |
+| oriondevcore.com | Landing page (lobby), Naledi AI chat, Naledi playground | Pages (orion-ventures) |
+| oriondevcore.com/fav/ | Favourites & history (consolidated from fav.oriondevcore.com) | Pages (orion-ventures) |
+| oriondevcore.com/profile/ | Singer profiles (consolidated from userdb.oriondevcore.com) | Pages (orion-ventures) |
+| oriondevcore.com/sing | → 302 → supatraxx.oriondevcore.com/scan | Pages (orion-ventures) |
 
 ## Databases
 
@@ -228,18 +242,25 @@ AI runs across everything — three distinct engines:
 - [x] Bottom nav: Search | My Songs | Faves | Profile
 - [x] `supatraxx.oriondevcore.com` custom domain assigned and serving (fixed root_dir → zen-search/)
 - [x] Landing page AI binding added (NALEDI AI + MODEL for Workers AI)
-- [ ] Windows poller offline (laptop disconnected from Connor's)
+- [ ] Windows poller still offline (laptop reconnected but poller status unknown)
+- [ ] Song count mismatch (224,956 in D1 vs 671,865 on Windows — ~447k missing)
+- [ ] Old fav.oriondevcore.com / userdb.oriondevcore.com subdomains still resolve to old Pages projects
+- [ ] Yoco tip endpoint exists but no frontend UI button on scan/search pages
 
 ### Phase 2 — Naledi & AI Features (In Progress 🔄)
 - [x] Upgrade Naledi to `@cf/zai-org/glm-4.7-flash` — supports tool calling, 131K context
 - [x] Add `searchSongs` tool — Naledi searches the 667K library for real song recommendations
 - [x] Multi-turn tool loop — GLM makes multiple search calls, combines results naturally
 - [x] Build `/naledi/tts` TTS endpoint via `@cf/myshell-ai/melotts` ($0.0002/min)
-- [x] Build Naledi test playground at `oriondevcore.com/naledi-test.html` (presets, tool debug panel, TTS toggle)
+- [x] Build `/naledi/stt` STT endpoint via `@cf/openai/whisper-large-v3-turbo` ($0.00045/min)
+- [x] Build Naledi test playground at `oriondevcore.com/naledi-test.html` (presets, tool debug panel, TTS toggle, mic button)
+- [x] Fix TTS wiring — chat endpoint now actually calls melotts and returns audio
+- [x] Proactive Naledi — system prompt updated for follow-up questions, dynamic init greeting, conversational flow
 - [ ] Add `getVenueInfo` tool — Naledi answers venue/event questions from live data
 - [ ] Add song request tool — Naledi can submit requests directly into the queue
 - [ ] Build Telegram bot for async Naledi chat when user is away from browser
 - [ ] Public launch: embed Naledi chat widget on landing page (already wired, polish needed)
+- [ ] Build Naledi knowledge base / question sheet for learning about Graham, vision, company
 
 ### Phase 3 — Intelligence & Scale
 - [ ] Trending / recommendation engine (collaborative filtering based on request patterns)
@@ -282,6 +303,26 @@ AI runs across everything — three distinct engines:
 | 15 | Tool calling for song search | `searchSongs` tool calls the worker API `/search` endpoint — Naledi searches the actual library instead of making up songs or hallucinating |
 | 16 | TTS via MeloTTS on Workers AI | `@cf/myshell-ai/melotts` at $0.0002/min — 537 min/day fits in $5 plan; returns base64 MP3 directly, no external API needed |
 | 17 | Pages root_dir must be set explicitly | `zen-search` Pages project had empty `root_dir` → published repo root (not `/zen-search/`) → every deployment served 404. Fixed via API: `root_dir: zen-search` |
+| 18 | STT via Whisper on Workers AI | `@cf/openai/whisper-large-v3-turbo` at $0.00045/min. Frontend sends base64 audio via MediaRecorder (webm/opus) → server decodes to Uint8Array → Workers AI binding → returns transcribed text |
+| 19 | TTS wired into chat endpoint | Chat.js accepts `tts: true` param but never called melotts (broken). Added `generateTTS()` helper that calls melotts after getting the reply. Max 500 chars per call |
+| 20 | Proactive Naledi via system prompt + init flow | System prompt: "End every reply with a question." Frontend: removed hardcoded first message, sends `init: true` on page load → Naledi generates a fresh dynamic greeting |
+| 21 | Docs site at docs.oriondevcore.com | Separate Pages project (orion-docs). Updated FAQ/HOWTO/HELP files with current domain paths. `_redirects` for clean URLs. Wrangler direct upload for deployment |
+| 22 | Subdomains consolidated to paths | `fav.oriondevcore.com` → `oriondevcore.com/fav/`, `userdb.oriondevcore.com` → `oriondevcore.com/profile/`. Simpler DNS, single Pages project |
+
+## Relevant Files
+
+| File | Purpose |
+|------|---------|
+| `/home/graham/ventures/functions/naledi/chat.js` | Naledi chat: GLM-4.7-Flash, searchSongs tool, TTS wiring, init/greeting |
+| `/home/graham/ventures/functions/naledi/tts.js` | TTS endpoint: MeloTTS, base64 MP3 |
+| `/home/graham/ventures/functions/naledi/stt.js` | STT endpoint: Whisper, accepts base64 audio |
+| `/home/graham/ventures/naledi-test.html` | Naledi playground: presets, mic, TTS toggle, tool panel |
+| `/home/graham/ventures/index.html` | Landing page lobby: 6 door cards, Naledi FAB |
+| `/home/graham/ventures/fav/` | Favourites page (served at /fav/) |
+| `/home/graham/ventures/profile/` | Profile page (served at /profile/) |
+| `/home/graham/docs-site/public/` | Docs site: FAQ.md, HOWTO.md, HELP.md (served at docs.oriondevcore.com) |
+| `/home/graham/orion-supasing/zen-search/` | SupaTraxx frontend (search, scan.html, style.css) |
+| `/home/graham/orion-supasing/master-plan.md` | This file |
 
 ## Tools & Credentials
 

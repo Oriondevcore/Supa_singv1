@@ -1,4 +1,38 @@
-# Dev Log — SupaSing
+# Dev Log — SupaSing / SupaTraxx
+
+## 2026-06-06 (Session 2) — STT + TTS Fix + Proactive Naledi + Docs Site
+
+### Naledi STT (Speech-to-Text)
+- **`/naledi/stt` endpoint**: uses `@cf/openai/whisper-large-v3-turbo` ($0.00045/min)
+- **Mic button** on naledi-test.html: click → MediaRecorder captures audio → base64 → whisper → transcribed text → auto-sent as chat message
+- Works with browser microphone, handles errors gracefully
+
+### TTS Fix — now actually works
+- Chat endpoint received `tts: true` param but **never called the TTS model** — bug
+- Added `generateTTS()` helper: after getting the reply, calls `@cf/myshell-ai/melotts` and includes `audio` in response
+- Frontend `data.audio` check now fires correctly — Naledi speaks her replies
+- Max 500 chars per TTS call (melotts limit)
+
+### Proactive Naledi
+- **System prompt** updated: Naledi now ends every reply with a question or invitation
+- **Dynamic greeting**: removed hardcoded first message from HTML. On page load, sends `init: true` to `/naledi/chat` — Naledi generates a fresh greeting every time
+- Personality: "always greet first, ask follow-up questions, suggest songs, keep conversation flowing"
+
+### Docs Site — docs.oriondevcore.com
+- Created `/home/graham/docs-site/public/` with FAQ.md, HOWTO.md, HELP.md (copied from supa_singv1, updated links to current domains)
+- Clean index page with navigation cards
+- `_redirects`: `/faq` → `/FAQ.md 200`, `/howto` → `/HOWTO.md 200`, `/help` → `/HELP.md 200`
+- Privacy policy + terms pages preserved from previous deployment
+- Deployed to `orion-docs` Pages project via wrangler direct upload (not git)
+
+### NEXUS POS / MPOS
+- Reviewed Nexus POS on GitHub — full-featured POS system, significant effort to port
+- MPOS remains a Google Apps Script solution for now (T. Mpumlwana & Associates)
+- Future: migrate MPOS from GAS to Cloudflare Workers when bandwidth allows
+
+### Known Issues
+- Windows poller still offline (laptop disconnected from Connor's)
+- Song count mismatch persists (224,956 in D1 vs 671,865 on Windows)
 
 ## 2026-06-06 — Naledi Phase 2: GLM-4.7-Flash + Tool Calling + TTS + Pages Cleanup
 
