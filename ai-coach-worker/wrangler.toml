@@ -1,0 +1,35 @@
+name = "ai-coach"
+main = "worker.js"
+compatibility_date = "2026-04-18"
+account_id = "fdd89cf30de14e1ddcfa5fbbf27581c1"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "../ai-coach/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[routes]]
+pattern = "coach.oriondevcore.com"
+custom_domain = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-coach-db"
+database_id = "b6f4ca33-88ae-4f35-8ce9-d14e0b624de8"
+
+[[d1_databases]]
+binding = "SONG_DB"
+database_name = "supatraxx_karaoke_db"
+database_id = "58be4e00-fcc2-4a05-843c-3f7870868210"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "coach-knowledge"
+
+[[r2_buckets]]
+binding = "RECORDINGS"
+bucket_name = "ai-coach-recordings"
+
+[ai]
+binding = "AI"
